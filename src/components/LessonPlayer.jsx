@@ -27,11 +27,13 @@ export default function LessonPlayer({ script, autoplay = false }) {
     scenes.forEach((s, i) => {
       if (stickersEnabled) {
         randomSticker(s.sticker).then((st) => {
-          if (!cancelled && st) setStickers((prev) => ({ ...prev, [i]: st }));
+          if (!cancelled) setStickers((prev) => ({ ...prev, [i]: st || false }));
         });
       }
-      findImage(s.imageQuery || "").then((img) => {
-        if (!cancelled && img) setImages((prev) => ({ ...prev, [i]: img }));
+      // Lessons saved before image support have no imageQuery: use the caption instead.
+      const query = s.imageQuery === undefined ? s.caption : s.imageQuery;
+      findImage(query || "").then((img) => {
+        if (!cancelled) setImages((prev) => ({ ...prev, [i]: img || false }));
       });
     });
     return () => {
@@ -83,9 +85,19 @@ export default function LessonPlayer({ script, autoplay = false }) {
     setPlaying((p) => !p);
   }
 
-  const sticker = stickers[index];
-  const image = images[index];
+  const sticker = stickers[index] || null;
+  const image = images[index] || null;
   const effect = EFFECTS.includes(scene.effect) ? scene.effect : EFFECTS[index % EFFECTS.length];
+
+  const stickerStatus = !stickersEnabled
+    ? "off (no Giphy key in this build)"
+    : stickers[index] === undefined
+      ? "loading"
+      : stickers[index]
+        ? "ok"
+        : "none found / blocked";
+  const imageStatus =
+    images[index] === undefined ? "loading" : images[index] ? images[index].credit : "none for this scene";
 
   return (
     <div className="player">
@@ -147,12 +159,12 @@ export default function LessonPlayer({ script, autoplay = false }) {
           <button className="icon-btn" onClick={() => go(index + 1)} disabled={atEnd} title="Next scene">›</button>
           <span className="muted small">Scene {index + 1} / {scenes.length}</span>
         </div>
-        <div className="row">
-          {image?.credit && <span className="muted small">Image: {image.credit}</span>}
-          <button className="link-btn small" onClick={() => setShowTranscript((s) => !s)}>
-            {showTranscript ? "Hide transcript" : "Show transcript"}
-          </button>
-        </div>
+        <button className="link-btn small" onClick={() => setShowTranscript((s) => !s)}>
+          {showTranscript ? "Hide transcript" : "Show transcript"}
+        </button>
+      </div>
+      <div className="muted small" style={{ marginTop: 4 }}>
+        Picture: {imageStatus} · Sticker: {stickerStatus} · Effect: {effect}
       </div>
 
       {!speechSynthesisSupported && (
