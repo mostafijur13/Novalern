@@ -6,14 +6,13 @@ import { prefetchNarration } from "../lib/tts";
 import { playSfx, preloadSfx, setSfxMuted, sfxMuted } from "../lib/sounds";
 
 const EFFECTS = ["fade", "slide", "zoom", "bounce"];
-// Where the picture sits on each scene. Cycles so the layout keeps changing.
 const LAYOUTS = ["right", "left", "cover", "top", "right", "cover", "left", "top"];
-const THEMES = 6; // colour themes defined in CSS as .theme-0 ... .theme-5
+const THEMES = 6;
 
 /**
  * Plays a lesson script like a video: one scene at a time, narrated, with a real
- * picture that moves around the stage, a sticker badge, animated captions,
- * colour themes that change per scene, sound effects and auto-advance.
+ * picture that moves around the stage, a sticker, pixel captions, colour themes,
+ * sound effects and auto-advance. Sized by width; never scrolls internally.
  */
 export default function LessonPlayer({ script, autoplay = false }) {
   const scenes = script.scenes;
@@ -28,7 +27,6 @@ export default function LessonPlayer({ script, autoplay = false }) {
   const scene = scenes[index];
   const atEnd = index >= scenes.length - 1;
 
-  // Prefetch visuals for every scene once.
   useEffect(() => {
     let cancelled = false;
     preloadSfx();
@@ -48,7 +46,6 @@ export default function LessonPlayer({ script, autoplay = false }) {
     };
   }, [scenes]);
 
-  // Sound on scene change (not on first paint).
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
@@ -60,7 +57,6 @@ export default function LessonPlayer({ script, autoplay = false }) {
     return () => clearTimeout(t);
   }, [index, playing, scenes.length]);
 
-  // Narrate the current scene while playing, then advance.
   useEffect(() => {
     if (!playing) {
       stopNarration();
@@ -117,30 +113,9 @@ export default function LessonPlayer({ script, autoplay = false }) {
   const layout = image ? LAYOUTS[index % LAYOUTS.length] : "none";
   const theme = index % THEMES;
 
-  const stickerStatus = !stickersEnabled
-    ? "off (no Giphy key in this build)"
-    : stickers[index] === undefined
-      ? "loading"
-      : stickers[index]
-        ? "ok"
-        : "none found / blocked";
-  const imageStatus =
-    images[index] === undefined ? "loading" : images[index] ? images[index].credit : "none for this scene";
-
   return (
     <div className="player">
-      <div
-        className={`stage fx-${effect} layout-${layout} theme-${theme}`}
-        onClick={togglePlay}
-        role="button"
-        aria-label={playing ? "Pause" : "Play"}
-      >
-        <div className="stage-bg">
-          <span className="blob b1" />
-          <span className="blob b2" />
-          <span className="blob b3" />
-        </div>
-
+      <div className={`stage fx-${effect} layout-${layout} theme-${theme}`} onClick={togglePlay} role="button" aria-label={playing ? "Pause" : "Play"}>
         {image && layout === "cover" && (
           <div className="stage-cover" key={`cover-${index}`}>
             <SceneImage image={image} alt={scene.imageQuery} />
@@ -165,7 +140,7 @@ export default function LessonPlayer({ script, autoplay = false }) {
             {image && layout !== "cover" ? (
               <SceneImage key={`img-${index}`} image={image} alt={scene.imageQuery} />
             ) : !image && !sticker ? (
-              <span className="stage-sticker-placeholder">✦</span>
+              <span className="stage-sticker-placeholder" />
             ) : null}
             {sticker && (
               <div className={"stage-sticker" + (image && layout !== "cover" ? " badge" : " solo")}>
@@ -175,18 +150,18 @@ export default function LessonPlayer({ script, autoplay = false }) {
           </div>
         </div>
 
-        <button className="mute-btn" onClick={toggleMute} title={muted ? "Unmute sound effects" : "Mute sound effects"}>
-          {muted ? "🔇" : "🔊"}
+        <button className="mute-btn" onClick={toggleMute} title={muted ? "Unmute sound effects" : "Mute sound effects"} aria-label={muted ? "Unmute sound effects" : "Mute sound effects"}>
+          {muted ? <MutedIcon /> : <SoundIcon />}
         </button>
 
         {!playing && (
           <div className="stage-overlay">
-            <span className="play-big">{atEnd ? "↻" : "▶"}</span>
+            <span className="play-big">{atEnd ? <ReplayIcon /> : <PlayIcon />}</span>
             <span>{atEnd ? "Replay lesson" : index === 0 ? "Play lesson" : "Resume"}</span>
           </div>
         )}
 
-        <div className="stage-progress">
+        <div className="stage-progress" aria-hidden="true">
           {scenes.map((_, i) => (
             <span key={i} className={i < index ? "done" : i === index ? (playing ? "active" : "current") : ""} />
           ))}
@@ -195,25 +170,20 @@ export default function LessonPlayer({ script, autoplay = false }) {
 
       <div className="player-controls">
         <div className="row">
-          <button className="icon-btn" onClick={() => go(index - 1)} disabled={index === 0} title="Previous scene">‹</button>
+          <button className="icon-btn" onClick={() => go(index - 1)} disabled={index === 0} title="Previous scene" aria-label="Previous scene"><PrevIcon /></button>
           <button className="btn sm" onClick={togglePlay}>
-            {playing ? "❚❚ Pause" : atEnd ? "↻ Replay" : "▶ Play"}
+            {playing ? "Pause" : atEnd ? "Replay" : "Play"}
           </button>
-          <button className="icon-btn" onClick={() => go(index + 1)} disabled={atEnd} title="Next scene">›</button>
-          <span className="muted small">Scene {index + 1} / {scenes.length}</span>
+          <button className="icon-btn" onClick={() => go(index + 1)} disabled={atEnd} title="Next scene" aria-label="Next scene"><NextIcon /></button>
+          <span className="scene-count">{index + 1} / {scenes.length}</span>
         </div>
         <button className="link-btn small" onClick={() => setShowTranscript((s) => !s)}>
           {showTranscript ? "Hide transcript" : "Show transcript"}
         </button>
       </div>
-      <div className="muted small" style={{ marginTop: 4 }}>
-        Picture: {imageStatus} · Sticker: {stickerStatus} · Effect: {effect} · Layout: {layout}
-      </div>
 
       {!speechSynthesisSupported && (
-        <p className="muted small" style={{ margin: "6px 0 0" }}>
-          Voice narration is not supported in this browser; scenes advance on a timer.
-        </p>
+        <p className="muted small" style={{ margin: "6px 0 0" }}>Voice narration is not supported in this browser; scenes advance on a timer.</p>
       )}
 
       {showTranscript && (
@@ -229,18 +199,17 @@ export default function LessonPlayer({ script, autoplay = false }) {
   );
 }
 
-/** Shows the first candidate URL that loads; hides itself if none do. */
 function SceneImage({ image, alt }) {
   const [i, setI] = useState(0);
   const src = image.candidates[i];
   if (!src) return null;
-  return (
-    <img
-      className="stage-image"
-      src={src}
-      alt={alt || ""}
-      referrerPolicy="no-referrer"
-      onError={() => setI((n) => n + 1)}
-    />
-  );
+  return <img className="stage-image" src={src} alt={alt || ""} referrerPolicy="no-referrer" onError={() => setI((n) => n + 1)} />;
 }
+
+const svgProps = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
+function PlayIcon() { return <svg {...svgProps} width={26} height={26} fill="currentColor" stroke="none"><path d="M7 4l13 8-13 8z" /></svg>; }
+function ReplayIcon() { return <svg {...svgProps} width={26} height={26}><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /></svg>; }
+function PrevIcon() { return <svg {...svgProps}><path d="M15 6l-6 6 6 6" /></svg>; }
+function NextIcon() { return <svg {...svgProps}><path d="M9 6l6 6-6 6" /></svg>; }
+function SoundIcon() { return <svg {...svgProps} width={16} height={16}><path d="M4 9v6h4l5 4V5L8 9z" /><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" /></svg>; }
+function MutedIcon() { return <svg {...svgProps} width={16} height={16}><path d="M4 9v6h4l5 4V5L8 9z" /><path d="M16 9l5 6M21 9l-5 6" /></svg>; }

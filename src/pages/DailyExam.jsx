@@ -32,36 +32,26 @@ export default function DailyExam() {
 
   const dailyExams = useMemo(() => exams.filter((e) => e.kind !== "weekly"), [exams]);
 
-  // Today's status and the day streak (consecutive days with a completed exam).
-  const { doneToday, todayBest, streak } = useMemo(() => {
+  const { doneToday, streak } = useMemo(() => {
     const days = new Set();
-    let best = null;
     const today = dayKey(new Date());
     for (const e of exams) {
       if (e.status !== "completed") continue;
       const d = toDate(e.completedAt || e.createdAt);
-      if (!d) continue;
-      const k = dayKey(d);
-      days.add(k);
-      if (k === today && e.total) {
-        const pct = Math.round((e.score / e.total) * 100);
-        best = best === null ? pct : Math.max(best, pct);
-      }
+      if (d) days.add(dayKey(d));
     }
     let count = 0;
     let cursor = new Date();
-    if (!days.has(dayKey(cursor))) cursor = new Date(cursor.getTime() - DAY); // streak may still be alive from yesterday
+    if (!days.has(dayKey(cursor))) cursor = new Date(cursor.getTime() - DAY);
     while (days.has(dayKey(cursor))) {
       count++;
       cursor = new Date(cursor.getTime() - DAY);
     }
-    return { doneToday: days.has(today), todayBest: best, streak: count };
+    return { doneToday: days.has(today), streak: count };
   }, [exams]);
 
   const completed = dailyExams.filter((e) => e.status === "completed" && e.total);
-  const avg = completed.length
-    ? Math.round((completed.reduce((s, e) => s + e.score / e.total, 0) / completed.length) * 100)
-    : null;
+  const avg = completed.length ? Math.round((completed.reduce((s, e) => s + e.score / e.total, 0) / completed.length) * 100) : null;
 
   async function quickStart() {
     if (!lessons?.length) return;
@@ -82,31 +72,16 @@ export default function DailyExam() {
 
   return (
     <div className="stack">
-      <section className="exam-hero">
-        <div>
-          <span className="eyebrow">{dateLabel}</span>
-          <h1>Daily exam</h1>
-          <p>
-            {lessons.length === 0
-              ? "Learn a lesson first and your daily exam unlocks."
-              : doneToday
-                ? `Done for today${todayBest !== null ? ` with a best of ${todayBest}%` : ""}. Another round never hurts.`
-                : "A few minutes now is what makes yesterday's lesson stay with you."}
-          </p>
-        </div>
-        <div className="exam-hero-stats">
-          <div className="hero-stat">
-            <strong>{streak}</strong>
-            <span>day streak {streak > 0 ? "🔥" : ""}</span>
-          </div>
-          <div className="hero-stat">
-            <strong>{avg === null ? "–" : `${avg}%`}</strong>
-            <span>average</span>
-          </div>
-          <div className="hero-stat">
-            <strong>{doneToday ? "✓" : "–"}</strong>
-            <span>today</span>
-          </div>
+      <section>
+        <h1 className="greet" style={{ fontSize: "clamp(1.8rem, 4.5vw, 2.5rem)" }}>Daily exam<span className="dot">.</span></h1>
+        <p className="greet-sub" style={{ marginBottom: 14 }}>
+          {dateLabel}.{" "}
+          {lessons.length === 0 ? "Learn a lesson first and your daily exam unlocks." : doneToday ? "Done for today. Another round never hurts." : "A few minutes now keeps yesterday's lesson with you."}
+        </p>
+        <div className="stats">
+          <div className="stat"><strong>{streak}</strong><span>day streak</span></div>
+          <div className="stat"><strong>{avg === null ? "–" : `${avg}%`}</strong><span>average score</span></div>
+          <div className="stat"><strong>{completed.length}</strong><span>exams done</span></div>
         </div>
       </section>
 
@@ -120,29 +95,23 @@ export default function DailyExam() {
         </div>
       ) : (
         <div className="grid-2">
-          <div className="stack">
-            <section className="card quick-card">
+          <div>
+            <div className="sec"><h2>Start</h2></div>
+            <div className="quick">
               <div>
-                <h3 style={{ marginBottom: 2 }}>Quick quiz</h3>
-                <span className="muted small">5 multiple-choice questions on your latest lesson: <strong>{lessons[0].title}</strong></span>
+                <strong>Quick quiz</strong>
+                <div className="muted small">5 multiple-choice questions on {lessons[0].title}</div>
               </div>
               <button className="btn primary" onClick={quickStart} disabled={quickBusy}>
-                {quickBusy ? "Writing…" : "Start now →"}
+                {quickBusy ? "Writing…" : "Start now"}
               </button>
-            </section>
-
-            <div>
-              <h2 style={{ marginBottom: 10 }}>Build your own</h2>
-              <ExamSetup lessons={lessons} kind="daily" initialSelected={preselected} />
             </div>
+            <ExamSetup lessons={lessons} kind="daily" initialSelected={preselected} />
           </div>
 
-          <section className="card" style={{ alignSelf: "start" }}>
-            <div className="spread" style={{ marginBottom: 10 }}>
-              <h2>Previous exams</h2>
-              <span className="chip">{completed.length} done</span>
-            </div>
-            <ExamList exams={dailyExams} emptyText="Your past daily exams will show up here." />
+          <section>
+            <div className="sec"><h2>Previous exams</h2></div>
+            <ExamList exams={dailyExams} emptyText="Your past daily exams will be listed here." />
           </section>
         </div>
       )}

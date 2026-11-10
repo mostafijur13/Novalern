@@ -7,6 +7,7 @@ import { EXAM_MODES } from "../lib/ai";
 import { formatDate, getExam } from "../lib/db";
 import { submitExam } from "../lib/examFlow";
 import { speak, startRecognition, stopSpeaking } from "../lib/speech";
+import { playSfx } from "../lib/sounds";
 
 export default function ExamRunner() {
   const { user } = useAuth();
@@ -16,14 +17,6 @@ export default function ExamRunner() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [elapsed, setElapsed] = useState(0);
-
-  // Elapsed-time clock while the exam is in progress.
-  useEffect(() => {
-    if (!exam || exam.status === "completed") return;
-    const started = Date.now();
-    const t = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
-    return () => clearInterval(t);
-  }, [exam]);
 
   useEffect(() => {
     getExam(user.uid, examId).then((doc) => {
@@ -37,6 +30,13 @@ export default function ExamRunner() {
     return () => stopSpeaking();
   }, [examId, user.uid]);
 
+  useEffect(() => {
+    if (!exam || exam.status === "completed") return;
+    const started = Date.now();
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [exam]);
+
   if (error && !exam) {
     return (
       <div>
@@ -49,6 +49,7 @@ export default function ExamRunner() {
 
   const done = exam.status === "completed";
   const answered = exam.questions.filter((q) => (answers[q.id] || "").trim()).length;
+  const backTo = exam.kind === "weekly" ? "/weekly" : "/daily";
 
   async function onSubmit() {
     const unanswered = exam.questions.length - answered;
@@ -58,6 +59,7 @@ export default function ExamRunner() {
     try {
       const update = await submitExam({ uid: user.uid, exam, answers, durationSec: elapsed });
       setExam({ ...exam, ...update });
+      playSfx(update.score / update.total >= 0.5 ? "ding" : "buzz");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       setError(err.message || "Could not grade the exam.");
@@ -68,57 +70,49 @@ export default function ExamRunner() {
 
   const resultsById = new Map((exam.results || []).map((r) => [r.id, r]));
   const pct = done && exam.total ? Math.round((exam.score / exam.total) * 100) : null;
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
+  const ss = String(elapsed % 60).padStart(2, "0");
 
   return (
-    <div className="stack" style={{ maxWidth: 820 }}>
+    <div className="stack" style={{ maxWidth: 820, gap: 22 }}>
       <div className="spread">
         <div>
-          <h1>{exam.title}</h1>
+          <h1 style={{ fontSize: "1.7rem" }}>{exam.title}</h1>
           <span className="muted small">
             {exam.kind === "weekly" ? "Weekly recap" : "Daily exam"} · {EXAM_MODES[exam.mode]?.label}
             {exam.difficulty ? ` · ${exam.difficulty}` : ""} · {formatDate(exam.createdAt)} · {exam.lessonTitles?.join(", ")}
           </span>
         </div>
-        <Link to={exam.kind === "weekly" ? "/weekly" : "/daily"} className="btn sm ghost">← Back</Link>
+        <Link to={backTo} className="btn sm ghost">Back</Link>
       </div>
 
       <ErrorBanner message={error} onClose={() => setError("")} />
 
       {done && (
-        <section className="card result-hero">
+        <section className="result-hero">
           <div className="big">{pct}%</div>
-          <p>
-            <strong>{exam.score} / {exam.total}</strong> points
-          </p>
+          <p><strong>{exam.score} / {exam.total}</strong> points{exam.durationSec ? ` in ${Math.floor(exam.durationSec / 60)}m ${exam.durationSec % 60}s` : ""}</p>
           <p className="muted">{exam.overallFeedback}</p>
-          <div className="row" style={{ justifyContent: "center" }}>
+          <div className="row">
             <Link to="/learn" className="btn ghost">Learn more</Link>
-            <Link to={exam.kind === "weekly" ? "/weekly" : "/daily"} className="btn primary">New exam</Link>
+            <Link to={backTo} className="btn primary">New exam</Link>
           </div>
         </section>
       )}
 
-      {exam.questions.map((q, idx) => (
-        <Question
-          key={q.id}
-          index={idx}
-          question={q}
-          mode={exam.mode}
-          value={answers[q.id] || ""}
-          onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))}
-          done={done}
-          result={resultsById.get(q.id)}
-        />
-      ))}
+      <div>
+        {exam.questions.map((q, idx) => (
+          <Question key={q.id} index={idx} question={q} mode={exam.mode} value={answers[q.id] || ""} onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))} done={done} result={resultsById.get(q.id)} />
+        ))}
+      </div>
 
       {!done && (
-        <div className="card spread">
+        <div className="spread" style={{ paddingTop: 8 }}>
           <span className="muted">
-            {answered} of {exam.questions.length} answered ·{" "}
-            <span className="exam-timer">{String(Math.floor(elapsed / 60)).padStart(2, "0")}:{String(elapsed % 60).padStart(2, "0")}</span>
+            {answered} of {exam.questions.length} answered · <span className="exam-timer">{mm}:{ss}</span>
           </span>
           <button className="btn primary lg" onClick={onSubmit} disabled={submitting}>
-            {submitting ? (exam.mode === "mcq" ? "Checking..." : "Grading with AI...") : "Submit exam"}
+            {submitting ? (exam.mode === "mcq" ? "Checking…" : "Grading with AI…") : "Submit exam"}
           </button>
         </div>
       )}
@@ -128,7 +122,6 @@ export default function ExamRunner() {
 
 function Question({ index, question, mode, value, onChange, done, result }) {
   const grade = result ? (result.score >= 1 ? "good" : result.score > 0 ? "mid" : "low") : null;
-
   return (
     <div className="question">
       <div className="q-num">Question {index + 1}</div>
@@ -144,14 +137,7 @@ function Question({ index, question, mode, value, onChange, done, result }) {
             } else if (opt === value) cls += " selected";
             return (
               <label key={opt} className={cls}>
-                <input
-                  type="radio"
-                  name={`q-${question.id}`}
-                  value={opt}
-                  checked={value === opt}
-                  onChange={() => onChange(opt)}
-                  disabled={done}
-                />
+                <input type="radio" name={`q-${question.id}`} value={opt} checked={value === opt} onChange={() => onChange(opt)} disabled={done} />
                 <span>{opt}</span>
               </label>
             );
@@ -160,24 +146,15 @@ function Question({ index, question, mode, value, onChange, done, result }) {
       ) : (
         <>
           {mode === "voice" && !done && <VoiceControls question={question.question} onTranscript={onChange} />}
-          <textarea
-            className="input"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={mode === "voice" ? "Your spoken answer appears here. You can edit it." : "Type your answer..."}
-            disabled={done}
-          />
+          <textarea className="input" value={value} onChange={(e) => onChange(e.target.value)} placeholder={mode === "voice" ? "Your spoken answer appears here. You can edit it." : "Type your answer…"} disabled={done} aria-label={`Answer to question ${index + 1}`} />
         </>
       )}
 
       {done && (
         <div className={`feedback ${grade}`}>
-          <strong>{result?.score >= 1 ? "Correct" : result?.score > 0 ? "Partly correct" : "Not quite"}.</strong>{" "}
-          {result?.feedback}
+          <strong>{result?.score >= 1 ? "Correct" : result?.score > 0 ? "Partly correct" : "Not quite"}.</strong> {result?.feedback}
           {mode !== "mcq" && (
-            <div style={{ marginTop: 6 }}>
-              <em>Model answer:</em> {question.answer}
-            </div>
+            <div style={{ marginTop: 6 }}><em>Model answer:</em> {question.answer}</div>
           )}
         </div>
       )}
@@ -216,10 +193,8 @@ function VoiceControls({ question, onTranscript }) {
 
   return (
     <div className="voice-row">
-      <button type="button" className="btn sm ghost" onClick={() => speak(question)}>🔊 Hear question</button>
-      <button type="button" className={"btn sm " + (recording ? "danger" : "")} onClick={toggle}>
-        {recording ? "■ Stop" : "🎤 Answer by voice"}
-      </button>
+      <button type="button" className="btn sm ghost" onClick={() => speak(question)}>Hear question</button>
+      <button type="button" className={"btn sm " + (recording ? "danger" : "")} onClick={toggle}>{recording ? "Stop" : "Answer by voice"}</button>
       {interim && <span className="interim small">{interim}</span>}
     </div>
   );

@@ -23,7 +23,6 @@ export default function WeeklyRecap() {
     };
   }, [user.uid]);
 
-  // Group this week's lessons by topic.
   const topics = useMemo(() => {
     if (!lessons) return [];
     const since = Date.now() - WEEK_MS;
@@ -45,10 +44,10 @@ export default function WeeklyRecap() {
 
   return (
     <div className="stack">
-      <div>
-        <h1>Weekly recap</h1>
-        <p className="muted">Select the topic of the week you want a recap exam on.</p>
-      </div>
+      <section>
+        <h1 className="greet" style={{ fontSize: "clamp(1.8rem, 4.5vw, 2.5rem)" }}>Weekly recap<span className="dot">.</span></h1>
+        <p className="greet-sub" style={{ marginBottom: 0 }}>Pick a topic from the last seven days and take a recap exam on it.</p>
+      </section>
 
       {topics.length === 0 ? (
         <div className="empty">
@@ -58,38 +57,26 @@ export default function WeeklyRecap() {
         </div>
       ) : (
         <div className="grid-2">
-          <div className="stack">
-            <section className="card">
-              <h2>This week's topics</h2>
-              <div className="row">
+          <div className="stack" style={{ gap: 20 }}>
+            <section>
+              <div className="sec"><h2>This week's topics</h2></div>
+              <div className="row" style={{ padding: "12px 0" }}>
                 {topics.map((t) => (
-                  <button
-                    key={t.name}
-                    className={"btn " + (topic === t.name ? "" : "ghost")}
-                    onClick={() => setTopic(t.name)}
-                  >
-                    {t.name} <span className="chip" style={{ marginLeft: 4 }}>{t.lessons.length}</span>
+                  <button key={t.name} className={"btn sm " + (topic === t.name ? "" : "ghost")} onClick={() => setTopic(t.name)}>
+                    {t.name} ({t.lessons.length})
                   </button>
                 ))}
               </div>
             </section>
-
             {chosen ? (
-              <ExamSetup
-                key={chosen.name}
-                lessons={chosen.lessons}
-                kind="weekly"
-                topic={chosen.name}
-                initialSelected={chosen.lessons.map((l) => l.id)}
-              />
+              <ExamSetup key={chosen.name} lessons={chosen.lessons} kind="weekly" topic={chosen.name} initialSelected={chosen.lessons.map((l) => l.id)} />
             ) : (
-              <p className="muted">Pick a topic above to build your recap exam.</p>
+              <p className="muted">Choose a topic above to build your recap exam.</p>
             )}
           </div>
-
-          <section className="card" style={{ alignSelf: "start" }}>
-            <h2>Previous recaps</h2>
-            <ExamList exams={weeklyExams} emptyText="Your weekly recap exams will show up here." />
+          <section>
+            <div className="sec"><h2>Previous recaps</h2></div>
+            <ExamList exams={weeklyExams} emptyText="Your weekly recap exams will be listed here." />
           </section>
         </div>
       )}
