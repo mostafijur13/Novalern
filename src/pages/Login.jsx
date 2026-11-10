@@ -1,18 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import ErrorBanner from "../components/ErrorBanner";
 import { useAuth } from "../context/AuthContext";
 import { firebaseConfigured } from "../lib/firebase";
+import "./login.css";
 
 const FRIENDLY = {
-  "auth/invalid-credential": "Wrong email or password.",
-  "auth/user-not-found": "No account with that email. Sign up instead.",
-  "auth/wrong-password": "Wrong email or password.",
+  "auth/invalid-credential": "That email and password don't match.",
+  "auth/user-not-found": "No account with that email yet. Create one below.",
+  "auth/wrong-password": "That email and password don't match.",
   "auth/email-already-in-use": "That email already has an account. Sign in instead.",
-  "auth/weak-password": "Password must be at least 6 characters.",
-  "auth/invalid-email": "That email address does not look right.",
-  "auth/popup-closed-by-user": "Google sign-in was closed before finishing.",
-  "auth/operation-not-allowed": "This sign-in method is not enabled in the Firebase console.",
+  "auth/weak-password": "Use at least 6 characters for the password.",
+  "auth/invalid-email": "That email address doesn't look right.",
+  "auth/popup-closed-by-user": "The Google window was closed before finishing.",
+  "auth/operation-not-allowed": "This sign-in method isn't enabled in Firebase yet.",
 };
 
 export default function Login() {
@@ -25,6 +25,17 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Intro: 0 = mark centred, 1 = mark slides left and wordmark reveals, 2 = form in.
+  const [stage, setStage] = useState(0);
+
+  useEffect(() => {
+    const a = setTimeout(() => setStage(1), 700);
+    const b = setTimeout(() => setStage(2), 1500);
+    return () => {
+      clearTimeout(a);
+      clearTimeout(b);
+    };
+  }, []);
 
   const from = location.state?.from?.pathname || "/";
   if (!loading && user) return <Navigate to={from} replace />;
@@ -48,73 +59,126 @@ export default function Login() {
   }
 
   return (
-    <div className="login-page">
-      <aside className="login-side">
-        <img src="/icon.png" alt="" width="64" style={{ borderRadius: 16, marginBottom: 24 }} />
-        <h1>Learn it today. Remember it all week.</h1>
-        <p>Novalern turns your class notes and problems into lessons, daily exams and weekly recaps.</p>
-        <ul>
-          <li>Upload a photo or PDF of your lesson and learn with AI</li>
-          <li>Speak or type your questions</li>
-          <li>Daily exams: multiple choice, written or voice</li>
-          <li>Weekly recap on the topics you studied</li>
-        </ul>
-      </aside>
+    <div className={`auth stage-${stage}`}>
+      <Doodles />
 
-      <main className="login-main">
-        <div className="card login-card">
-          <img src="/logo.png" alt="novalern." style={{ height: 36, marginBottom: 16 }} />
-          <h2>{mode === "signin" ? "Welcome back" : "Create your account"}</h2>
-          <p className="muted">
-            {mode === "signin" ? "Sign in to continue learning." : "It takes less than a minute."}
+      <main className="auth-card">
+        <div className="brand">
+          <img src="/icon.png" alt="" className="brand-mark" />
+          <span className="brand-word" aria-label="novalern">
+            <span className="w-nova">nova</span>
+            <span className="w-lern">lern</span>
+            <span className="w-dot">.</span>
+          </span>
+        </div>
+
+        <div className="auth-body">
+          <h1 className="auth-title">{mode === "signin" ? "Welcome back" : "Make an account"}</h1>
+          <p className="auth-sub">
+            {mode === "signin" ? "Pick up where you left off." : "Takes about thirty seconds."}
           </p>
 
           {!firebaseConfigured && (
-            <ErrorBanner message="Firebase is not configured. Copy .env.example to .env and fill in your project keys." />
+            <p className="auth-error">Firebase isn't configured. Copy .env.example to .env and add your keys.</p>
           )}
-          <ErrorBanner message={error} onClose={() => setError("")} />
+          {error && <p className="auth-error" role="alert">{error}</p>}
 
-          <form onSubmit={onSubmit}>
+          <form onSubmit={onSubmit} className="auth-form">
             {mode === "signup" && (
-              <div className="field">
-                <label htmlFor="name">Name</label>
-                <input id="name" className="input" value={name} onChange={(e) => setName(e.target.value)} required />
-              </div>
+              <label className="field-line">
+                <span>Name</span>
+                <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required />
+              </label>
             )}
-            <div className="field">
-              <label htmlFor="email">Email</label>
-              <input id="email" type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            </div>
-            <div className="field">
-              <label htmlFor="password">Password</label>
-              <input id="password" type="password" className="input" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} required />
-            </div>
-            <button className="btn primary" style={{ width: "100%" }} disabled={busy || !firebaseConfigured}>
-              {busy ? "Please wait..." : mode === "signin" ? "Sign in" : "Sign up"}
+            <label className="field-line">
+              <span>Email</span>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
+            </label>
+            <label className="field-line">
+              <span>Password</span>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                minLength={6}
+                required
+              />
+            </label>
+
+            <button className="auth-primary" disabled={busy || !firebaseConfigured}>
+              {busy ? "One moment…" : mode === "signin" ? "Sign in" : "Create account"}
             </button>
           </form>
 
-          <div className="divider">or</div>
-          <button className="btn ghost" style={{ width: "100%" }} disabled={busy || !firebaseConfigured} onClick={() => run(signInWithGoogle)}>
+          <div className="auth-or"><span>or</span></div>
+
+          <button className="auth-google" type="button" disabled={busy || !firebaseConfigured} onClick={() => run(signInWithGoogle)}>
             <GoogleIcon /> Continue with Google
           </button>
 
-          <p className="muted small" style={{ marginTop: 18, textAlign: "center" }}>
+          <p className="auth-switch">
             {mode === "signin" ? (
-              <>
-                New here?{" "}
-                <button type="button" className="link-btn" onClick={() => setMode("signup")}>Create an account</button>
-              </>
+              <>New here? <button type="button" onClick={() => setMode("signup")}>Create an account</button></>
             ) : (
-              <>
-                Already have an account?{" "}
-                <button type="button" className="link-btn" onClick={() => setMode("signin")}>Sign in</button>
-              </>
+              <>Already have one? <button type="button" onClick={() => setMode("signin")}>Sign in</button></>
             )}
           </p>
         </div>
       </main>
+
+      <footer className="auth-foot">Learn it today. Remember it all week.</footer>
     </div>
+  );
+}
+
+/* Hand-drawn ink doodles scattered around the page. Hidden on small screens except two. */
+function Doodles() {
+  return (
+    <svg className="doodles" viewBox="0 0 1200 800" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {/* open notebook, top left */}
+      <g className="d d1" transform="translate(110 130)">
+        <path d="M0 10 Q40 -4 80 10 L80 110 Q40 96 0 110 Z" />
+        <path d="M80 10 Q120 -4 160 10 L160 110 Q120 96 80 110" />
+        <path d="M14 36h50M14 54h50M14 72h36M96 36h50M96 54h40" strokeWidth="1.5" />
+      </g>
+      {/* lightbulb, right */}
+      <g className="d d2" transform="translate(960 150)">
+        <path d="M40 0a32 32 0 0 1 20 57c-6 5-8 11-8 18H28c0-7-2-13-8-18A32 32 0 0 1 40 0Z" />
+        <path d="M30 86h20M32 96h16" />
+        <path d="M40 -22v10M70 -8l-7 7M10 -8l7 7" strokeWidth="1.5" />
+      </g>
+      {/* paper plane with dotted trail, bottom left */}
+      <g className="d d3" transform="translate(150 560)">
+        <path d="M0 40 L120 0 L70 90 L52 54 Z" />
+        <path d="M52 54 L120 0" />
+        <path d="M-10 60 C-40 70 -60 90 -90 100" strokeDasharray="2 8" />
+      </g>
+      {/* squiggle, top centre-right */}
+      <path className="d d4" d="M700 70c15-25 30 25 45 0s30 25 45 0 30 25 45 0" />
+      {/* little sun / star, bottom right */}
+      <g className="d d5" transform="translate(1010 580)">
+        <circle cx="0" cy="0" r="14" />
+        <path d="M0 -30v-10M0 30v10M30 0h10M-30 0h-10M21 -21l7-7M-21 21l-7 7M21 21l7 7M-21 -21l-7-7" strokeWidth="1.5" />
+      </g>
+      {/* checkbox list, left middle */}
+      <g className="d d6" transform="translate(60 360)">
+        <rect x="0" y="0" width="16" height="16" rx="3" /><path d="M4 8l4 4 6-7" /><path d="M26 8h60" strokeWidth="1.5" />
+        <rect x="0" y="30" width="16" height="16" rx="3" /><path d="M4 38l4 4 6-7" /><path d="M26 38h48" strokeWidth="1.5" />
+        <rect x="0" y="60" width="16" height="16" rx="3" /><path d="M26 68h56" strokeWidth="1.5" />
+      </g>
+      {/* speech bubble, right lower */}
+      <g className="d d7" transform="translate(880 420)">
+        <path d="M0 0h110a10 10 0 0 1 10 10v44a10 10 0 0 1-10 10H40l-22 18v-18H10A10 10 0 0 1 0 54V10A10 10 0 0 1 10 0Z" transform="translate(-10 0)" />
+        <path d="M14 22h70M14 40h46" strokeWidth="1.5" />
+      </g>
+      {/* dotted block, bottom centre */}
+      <g className="d d8" transform="translate(560 690)" fill="currentColor" stroke="none">
+        {Array.from({ length: 4 }).flatMap((_, r) =>
+          Array.from({ length: 7 }).map((_, c) => <circle key={`${r}-${c}`} cx={c * 14} cy={r * 14} r="1.6" />)
+        )}
+      </g>
+    </svg>
   );
 }
 
