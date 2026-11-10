@@ -24,7 +24,8 @@
 .doodles .d3 { animation-delay: 1.7s; } .doodles .d4 { animation-delay: 1.85s; }
 .doodles .d5 { animation-delay: 2s; }   .doodles .d6 { animation-delay: 2.1s; }
 .doodles .d7 { animation-delay: 2.2s; } .doodles .d8 { animation-delay: 2.3s; }
-@keyframes ink { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* opacity only: a CSS transform here would override the SVG transform that positions each drawing */
+@keyframes ink { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 760px) {
   .doodles .d1, .doodles .d3, .doodles .d6, .doodles .d7, .doodles .d8 { display: none; }
 }
