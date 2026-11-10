@@ -1,8 +1,9 @@
 // All AI calls for Novalern, on Groq (https://console.groq.com).
 //
-// Two transports:
-//   1. Cloud Function "model" (default, production) - the API key stays on the server.
-//   2. Direct browser call (local dev only) when VITE_GROQ_API_KEY is set.
+// Three transports, picked automatically:
+//   "direct"   - VITE_GROQ_API_KEY is set: the browser calls Groq (local development only).
+//   "vercel"   - default in production: POST /api/model (Vercel serverless function; key stays on the server).
+//   "firebase" - VITE_AI_BACKEND=firebase: Firebase Cloud Function "model" (see /functions).
 //
 // Models:
 //   TEXT_MODEL   - fast reasoning model for chat, exams and grading (no image input).
@@ -10,14 +11,29 @@
 
 import Groq from "groq-sdk";
 import { httpsCallable } from "firebase/functions";
-import { functions } from "./firebase";
+import { auth, functions } from "./firebase";
 
 export const TEXT_MODEL = "openai/gpt-oss-120b";
 export const VISION_MODEL = "qwen/qwen3.8-27b";
 export const MAX_IMAGES = 3;
 
 const directKey = import.meta.env.VITE_GROQ_API_KEY;
-export const aiMode = directKey ? "direct" : "functions";
+export const aiMode = directKey
+  ? "direct"
+  : import.meta.env.VITE_AI_BACKEND === "firebase"
+    ? "firebase"
+    : "vercel";
+
+/** Calls a Vercel API route with the signed-in user's Firebase ID token. */
+export async function apiFetch(path, body) {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error("Please sign in again.");
+  return fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+}
 
 let directClient = null;
 function getDirectClient() {
@@ -50,10 +66,39 @@ async function callModel({ system, messages, schema, schemaName = "result", maxT
     } catch (err) {
       throw friendlyError(err);
     }
+  } else if (aiMode === "vercel") {
+    let res;
+    try {
+      res = await apiFetch("/api/model", body);
+    } catch (err) {
+      throw new Error("Could not reach the AI server. Check your connection and try again.");
+    }
+    if (!res.ok) {
+      let message = `AI server error ${res.status}`;
+      try {
+        const json = await res.json();
+        message = json?.error?.message || message;
+      } catch {
+        /* non-JSON body */
+      }
+      if (res.status === 401) throw new Error("Please sign in again.");
+      if (res.status === 429) throw new Error("The AI is busy (rate limit). Please wait a moment and try again.");
+      if (res.status === 404) throw new Error("The /api/model route was not found. Deploy the api/ folder (see README).");
+      throw new Error(message);
+    }
+    response = await res.json();
   } else {
-    const fn = httpsCallable(functions, "model", { timeout: 300_000 });
-    const result = await fn(body);
-    response = result.data;
+    try {
+      const fn = httpsCallable(functions, "model", { timeout: 300_000 });
+      const result = await fn(body);
+      response = result.data;
+    } catch (err) {
+      throw new Error(
+        err?.code === "functions/internal" || err?.code === "functions/not-found"
+          ? "The Firebase Cloud Function is not deployed. Run `firebase deploy --only functions` or use the Vercel API (see README)."
+          : err?.message || "AI request failed."
+      );
+    }
   }
 
   const choice = response.choices?.[0];

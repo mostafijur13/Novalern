@@ -28,19 +28,20 @@ Stack: React 19 + Vite, React Router, Firebase Auth (email/password + Google), F
 ## 2. Groq API key
 
 1. Create a key at <https://console.groq.com/keys> (free tier available).
-2. Choose how the app will use it:
+2. Accept the terms for the voice model once at <https://console.groq.com/playground?model=canopylabs%2Forpheus-v1-english> (otherwise lessons use the browser voice).
+3. Choose how the app will use the key:
 
-**A. Cloud Function (recommended, key stays on the server)** – requires the Firebase Blaze (pay-as-you-go) plan.
+**A. Vercel (recommended for hosting)** – the `api/` folder contains serverless functions that hold the key. In the Vercel project set `GROQ_API_KEY` (no `VITE_` prefix) plus all the `VITE_FIREBASE_*` and `VITE_GIPHY_API_KEY` variables, and leave `VITE_GROQ_API_KEY` unset. Redeploy after changing variables. Also add your Vercel domain under Firebase Authentication → Settings → Authorized domains.
+
+**B. Firebase Cloud Function** – requires the Blaze plan. Set `VITE_AI_BACKEND=firebase` at build time and deploy:
 
 ```bash
 cd functions && npm install && cd ..
-firebase functions:secrets:set GROQ_API_KEY   # paste your key when prompted
+firebase functions:secrets:set GROQ_API_KEY
 firebase deploy --only functions
 ```
 
-Leave `VITE_GROQ_API_KEY` empty in `.env`.
-
-**B. Direct from the browser (local development only)** – set `VITE_GROQ_API_KEY=gsk_...` in `.env`. The key is bundled into the page, so never deploy a build made this way.
+**C. Direct from the browser (local development only)** – set `VITE_GROQ_API_KEY=gsk_...` in `.env`. The key is bundled into the page, so never deploy a build made this way.
 
 ## 3. Run
 
@@ -52,6 +53,10 @@ npm run dev
 Open <http://localhost:5173>.
 
 ## 4. Deploy
+
+**Vercel:** push the repo and import it on vercel.com (framework: Vite). `vercel.json` rewrites routes to the app and gives the API functions a 60 s limit. Set the environment variables listed in 2A.
+
+**Firebase Hosting:**
 
 ```bash
 npm run build

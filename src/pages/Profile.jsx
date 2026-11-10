@@ -95,7 +95,7 @@ export default function Profile() {
         <p className="muted small">
           Voice input: {speechRecognitionSupported ? "supported" : "not supported in this browser (use Chrome or Edge)"}
           <br />
-          AI connection: {aiMode === "direct" ? "direct (development key)" : "Cloud Function"}
+          AI connection: {aiMode === "direct" ? "direct (development key)" : aiMode === "vercel" ? "Vercel API" : "Firebase Cloud Function"}
         </p>
       </section>
 

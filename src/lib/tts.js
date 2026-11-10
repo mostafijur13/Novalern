@@ -4,7 +4,7 @@
 
 import { httpsCallable } from "firebase/functions";
 import { functions } from "./firebase";
-import { aiMode } from "./ai";
+import { aiMode, apiFetch } from "./ai";
 
 export const TTS_MODEL = "canopylabs/orpheus-v1-english";
 export const VOICES = ["hannah", "autumn", "diana", "austin", "daniel", "troy"];
@@ -108,6 +108,12 @@ async function fetchChunk(input) {
         headers: { Authorization: `Bearer ${directKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model: TTS_MODEL, voice: getVoice(), input, response_format: "wav" }),
       });
+      if (res.ok) return await res.blob();
+      await handleHttpError(res.status, await res.text(), res.headers.get("retry-after"));
+      return null;
+    }
+    if (aiMode === "vercel") {
+      const res = await apiFetch("/api/speech", { input, voice: getVoice() });
       if (res.ok) return await res.blob();
       await handleHttpError(res.status, await res.text(), res.headers.get("retry-after"));
       return null;
