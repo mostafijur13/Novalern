@@ -17,7 +17,7 @@ export default function Layout() {
   return (
     <div className="shell">
       <header className="topbar">
-        <Logo height={46} />
+        <Logo height={64} />
         <button className="avatar-btn" onClick={() => navigate("/profile")} title="Profile">
           {user?.photoURL ? (
             <img src={user.photoURL} alt="" referrerPolicy="no-referrer" />

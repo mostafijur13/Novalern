@@ -12,9 +12,11 @@ export default function LessonList({ lessons, emptyText = "No lessons yet.", max
           <Link to={`/learn/${l.id}`} className="lesson-item">
             <div className="lesson-item-main">
               <strong>{l.title}</strong>
-              <span className="muted small">{formatDateTime(l.updatedAt || l.createdAt)}</span>
+              <span className="muted small">
+                {l.topic || "General"} · {formatDateTime(l.updatedAt || l.createdAt)}
+              </span>
             </div>
-            <span className="chip">{l.topic || "General"}</span>
+            <span className="muted" aria-hidden="true">›</span>
           </Link>
         </li>
       ))}

@@ -1,7 +1,7 @@
 /* Layout and page refinements (loaded after index.css). */
 
 /* ---------- shell: top bar + bottom navigation ---------- */
-.topbar { height: 72px; padding: 0 24px; }
+.topbar { height: 88px; padding: 0 24px; }
 .shell { padding-bottom: 84px; }
 .content { padding: 28px 28px 32px; }
 .sidenav { display: none; }
@@ -20,7 +20,8 @@
 .bottomnav .navlink.active { background: var(--navy); color: #fff; }
 .bottomnav .navlink.active svg { color: var(--lime); }
 @media (max-width: 760px) {
-  .topbar { height: 64px; padding: 0 16px; }
+  .topbar { height: 72px; padding: 0 16px; }
+  .topbar .logo img { height: 48px !important; }
   .content { padding: 16px 16px 24px; }
   .bottomnav { height: 66px; gap: 2px; padding: 6px 6px; }
   .bottomnav .navlink { min-width: 0; flex: 1; padding: 6px 4px; font-size: 0.68rem; }
@@ -28,8 +29,8 @@
 }
 
 /* ---------- learn with AI ---------- */
-.chat { height: calc(100vh - 72px - 84px - 60px); min-height: 520px; }
-@media (max-width: 760px) { .chat { height: calc(100vh - 64px - 66px - 40px); } }
+.chat { height: calc(100vh - 88px - 84px - 60px); min-height: 520px; }
+@media (max-width: 760px) { .chat { height: calc(100vh - 72px - 66px - 40px); } }
 .tutor-avatar { width: 42px; height: 42px; border-radius: 12px; }
 .chat-scroll { gap: 22px; padding: 6px 2px 10px; }
 
