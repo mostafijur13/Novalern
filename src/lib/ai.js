@@ -398,8 +398,13 @@ export const EXAM_MODES = {
  * @param {number} count
  * @param {'daily'|'weekly'} kind
  */
-export async function generateExam(lessons, mode, count, kind) {
+export async function generateExam(lessons, mode, count, kind, difficulty = "medium") {
   const material = lessons.map(lessonToText).join("\n\n---\n\n");
+  const difficultyInstruction = {
+    easy: "Difficulty: easy. Test key facts, definitions and direct recall from the material.",
+    medium: "Difficulty: medium. Mix recall with understanding: explain why, give examples, simple applications.",
+    hard: "Difficulty: hard. Require applying the ideas to new situations, multi-step reasoning, and spotting common mistakes.",
+  }[difficulty] || "";
   const modeInstruction =
     mode === "mcq"
       ? "Every question is multiple choice with exactly 4 options and exactly one correct option. 'answer' must match one option word-for-word."
@@ -410,7 +415,7 @@ export async function generateExam(lessons, mode, count, kind) {
     messages: [
       {
         role: "user",
-        content: `Create a ${kind} exam with exactly ${count} questions. ${modeInstruction}\nNumber the ids 1..${count}.\n\nStudy material:\n\n${material}`,
+        content: `Create a ${kind} exam with exactly ${count} questions. ${modeInstruction}\n${difficultyInstruction}\nNumber the ids 1..${count}.\n\nStudy material:\n\n${material}`,
       },
     ],
     schema: EXAM_SCHEMA,

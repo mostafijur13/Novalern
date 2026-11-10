@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import ErrorBanner from "../components/ErrorBanner";
+import LessonPlayer from "../components/LessonPlayer";
 import Spinner from "../components/Spinner";
 import { useAuth } from "../context/AuthContext";
 import { generateLessonScript, scriptToText, summarizeLesson } from "../lib/ai";
-import LessonPlayer from "../components/LessonPlayer";
 import { createLesson, getLesson, updateLesson } from "../lib/db";
 import { ACCEPT_ATTR, formatBytes, readUpload } from "../lib/files";
 import { speechRecognitionSupported, startRecognition } from "../lib/speech";
@@ -14,6 +14,14 @@ const SUGGESTIONS = [
   "Explain photosynthesis like I'm in grade 8",
   "Help me solve: 2x + 5 = 17",
   "Summarize the causes of World War I",
+  "What is Newton's second law, with an example?",
+];
+
+const LOADING_STEPS = [
+  "Reading your question",
+  "Planning the lesson",
+  "Writing the scenes",
+  "Finding pictures and a voice",
 ];
 
 export default function Learn() {
@@ -28,14 +36,19 @@ export default function Learn() {
   const [interim, setInterim] = useState("");
   const [files, setFiles] = useState([]);
   const [sending, setSending] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState("");
   const [autoplayIndex, setAutoplayIndex] = useState(-1);
 
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
   const stopRecRef = useRef(null);
   const inputBeforeRecRef = useRef("");
+
+  const firstName = (user.displayName || user.email || "there").split(" ")[0].split("@")[0];
+  const initial = firstName[0]?.toUpperCase() || "?";
 
   // Load an existing lesson, or reset for a new one.
   useEffect(() => {
@@ -66,6 +79,14 @@ export default function Learn() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, sending]);
+
+  // Cycle the "preparing your lesson" steps while waiting.
+  useEffect(() => {
+    if (!sending) return;
+    setLoadingStep(0);
+    const t = setInterval(() => setLoadingStep((s) => Math.min(s + 1, LOADING_STEPS.length - 1)), 1800);
+    return () => clearInterval(t);
+  }, [sending]);
 
   useEffect(() => () => stopRecRef.current?.(), []);
 
@@ -136,9 +157,8 @@ export default function Learn() {
       setAutoplayIndex(next.length - 1);
 
       if (!lesson) {
-        // First exchange: create the lesson, then label it in the background.
-        const id = await createLesson(user.uid, { messages: next, title: text.slice(0, 60) || "New lesson" });
-        const created = { id, title: text.slice(0, 60) || "New lesson", topic: "General", messages: next };
+        const id = await createLesson(user.uid, { messages: next, title: script.title || text.slice(0, 60) || "New lesson" });
+        const created = { id, title: script.title || text.slice(0, 60) || "New lesson", topic: "General", messages: next };
         setLesson(created);
         navigate(`/learn/${id}`, { replace: true });
         summarizeLesson(next)
@@ -175,23 +195,30 @@ export default function Learn() {
     );
   }
 
+  const canSend = !sending && (input.trim() || files.length > 0);
+
   return (
     <div className="chat">
       <div className="chat-header">
-        <div>
-          <h1 style={{ fontSize: "1.25rem" }}>{lesson ? lesson.title : "Learn with AI"}</h1>
-          <span className="muted small">
-            {lesson ? lesson.topic : "Upload your problem or your class lesson to understand it better."}
-          </span>
+        <div className="row" style={{ gap: 12 }}>
+          <img src="/icon.png" alt="" className="tutor-avatar" />
+          <div>
+            <h1 style={{ fontSize: "1.2rem", marginBottom: 2 }}>{lesson ? lesson.title : "Learn with AI"}</h1>
+            <span className="muted small">
+              {lesson ? (
+                <span className="chip">{lesson.topic}</span>
+              ) : (
+                "Your personal tutor. Ask, speak, or upload your lesson."
+              )}
+            </span>
+          </div>
         </div>
-        <div className="row">
-          {lesson && (
+        {lesson && (
+          <div className="row">
             <Link to="/daily" state={{ lessonId: lesson.id }} className="btn sm ghost">Take exam on this</Link>
-          )}
-          {lesson && (
             <Link to="/learn" className="btn sm">+ New lesson</Link>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <ErrorBanner message={error} onClose={() => setError("")} />
@@ -199,45 +226,84 @@ export default function Learn() {
       <div className="chat-scroll" ref={scrollRef}>
         {messages.length === 0 && !sending && (
           <div className="welcome">
-            <img src="/icon.png" alt="" width="56" style={{ borderRadius: 14, marginBottom: 12 }} />
-            <h2>What are we learning today?</h2>
-            <p>Type a question, tap the mic to speak, or upload a PNG / PDF of your class lesson. Novalern turns it into a short narrated video lesson.</p>
+            <h2>Hi {firstName}. What are we learning today?</h2>
+            <p>Pick a way to start, or just type below. You'll get a short video lesson back in a few seconds.</p>
+            <div className="start-grid">
+              <button className="start-card" onClick={() => textareaRef.current?.focus()}>
+                <span className="start-ico">⌨️</span>
+                <strong>Type a question</strong>
+                <span className="muted small">Any subject, any level</span>
+              </button>
+              <button className="start-card" onClick={toggleRecording} disabled={!speechRecognitionSupported}>
+                <span className="start-ico">🎤</span>
+                <strong>Say it out loud</strong>
+                <span className="muted small">{speechRecognitionSupported ? "Tap and start talking" : "Needs Chrome or Edge"}</span>
+              </button>
+              <button className="start-card" onClick={() => fileInputRef.current?.click()}>
+                <span className="start-ico">📄</span>
+                <strong>Upload notes</strong>
+                <span className="muted small">Photo or PDF of a page</span>
+              </button>
+            </div>
             <div className="suggestions">
               {SUGGESTIONS.map((s) => (
-                <button key={s} className="btn sm ghost" onClick={() => send(s)}>{s}</button>
+                <button key={s} className="chip-btn" onClick={() => send(s)}>{s}</button>
               ))}
             </div>
           </div>
         )}
 
         {messages.map((m, i) =>
-          m.role === "assistant" && m.script ? (
-            <div key={i} className="msg-video">
-              <LessonPlayer script={m.script} autoplay={i === autoplayIndex} />
+          m.role === "assistant" ? (
+            <div key={i} className="turn assistant">
+              <div className="turn-meta">
+                <img src="/icon.png" alt="" className="turn-avatar" />
+                <span>Novalern</span>
+              </div>
+              {m.script ? (
+                <LessonPlayer script={m.script} autoplay={i === autoplayIndex} />
+              ) : (
+                <div className="msg assistant"><ReactMarkdown>{m.text}</ReactMarkdown></div>
+              )}
             </div>
           ) : (
-            <div key={i} className={`msg ${m.role}`}>
-              {m.attachments?.length > 0 && (
-                <div className="msg-files">
-                  {m.attachments.map((a, j) => (
-                    <span key={j} className="chip">📎 {a.name}</span>
-                  ))}
-                </div>
-              )}
-              {m.role === "assistant" ? <ReactMarkdown>{m.text}</ReactMarkdown> : m.text}
+            <div key={i} className="turn user">
+              <div className="turn-meta">
+                <span>You</span>
+                <span className="turn-avatar initial">{initial}</span>
+              </div>
+              <div className="msg user">
+                {m.attachments?.length > 0 && (
+                  <div className="msg-files">
+                    {m.attachments.map((a, j) => (
+                      <span key={j} className="chip">📎 {a.name}</span>
+                    ))}
+                  </div>
+                )}
+                {m.text}
+              </div>
             </div>
           )
         )}
 
         {sending && (
-          <div className="msg assistant">
-            <span className="typing"><i /><i /><i /></span>
-            <span className="muted small" style={{ marginLeft: 8 }}>Writing your video lesson...</span>
+          <div className="turn assistant">
+            <div className="turn-meta">
+              <img src="/icon.png" alt="" className="turn-avatar" />
+              <span>Novalern</span>
+            </div>
+            <div className="preparing">
+              <span className="typing"><i /><i /><i /></span>
+              <div>
+                <strong>Preparing your video lesson</strong>
+                <div className="muted small">{LOADING_STEPS[loadingStep]}…</div>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      <div className="composer">
+      <div className={"composer" + (recording ? " listening" : "")}>
         {files.length > 0 && (
           <div className="attachments">
             {files.map((f, i) => (
@@ -254,10 +320,11 @@ export default function Learn() {
           </div>
         )}
         <textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={recording ? "Listening..." : "Ask anything, or describe what you uploaded..."}
+          placeholder={recording ? "Listening… speak now" : lesson ? "Ask a follow-up question…" : "Ask anything, or describe what you uploaded…"}
           rows={2}
           disabled={sending}
         />
@@ -265,21 +332,21 @@ export default function Learn() {
         <div className="composer-bar">
           <div className="row">
             <input ref={fileInputRef} type="file" accept={ACCEPT_ATTR} multiple hidden onChange={onPickFiles} />
-            <button className="icon-btn" title="Upload PNG, JPG or PDF" onClick={() => fileInputRef.current?.click()} disabled={sending}>
-              <ClipIcon />
+            <button className="tool-btn" onClick={() => fileInputRef.current?.click()} disabled={sending}>
+              <ClipIcon /> Upload
             </button>
             <button
-              className={"icon-btn" + (recording ? " recording" : "")}
-              title={speechRecognitionSupported ? (recording ? "Stop listening" : "Speak your question") : "Voice input not supported in this browser"}
+              className={"tool-btn" + (recording ? " recording" : "")}
               onClick={toggleRecording}
               disabled={sending || !speechRecognitionSupported}
+              title={speechRecognitionSupported ? "" : "Voice input needs Chrome or Edge"}
             >
-              <MicIcon />
+              <MicIcon /> {recording ? "Stop" : "Speak"}
             </button>
-            <span className="muted small">PNG, JPG, PDF up to 6 MB (up to 3 images per message)</span>
+            <span className="muted small hide-mobile">PNG, JPG or PDF · up to 6 MB</span>
           </div>
-          <button className="btn primary" onClick={() => send()} disabled={sending || (!input.trim() && files.length === 0)}>
-            Send
+          <button className="btn primary send-btn" onClick={() => send()} disabled={!canSend}>
+            {sending ? "Working…" : "Send"} <span aria-hidden="true">↑</span>
           </button>
         </div>
       </div>
@@ -289,14 +356,14 @@ export default function Learn() {
 
 function ClipIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M21 12.5l-8.5 8.5a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" />
     </svg>
   );
 }
 function MicIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
       <rect x="9" y="3" width="6" height="11" rx="3" />
       <path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6" />
     </svg>

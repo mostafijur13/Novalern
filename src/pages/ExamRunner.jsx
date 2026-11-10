@@ -15,6 +15,15 @@ export default function ExamRunner() {
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [elapsed, setElapsed] = useState(0);
+
+  // Elapsed-time clock while the exam is in progress.
+  useEffect(() => {
+    if (!exam || exam.status === "completed") return;
+    const started = Date.now();
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [exam]);
 
   useEffect(() => {
     getExam(user.uid, examId).then((doc) => {
@@ -47,7 +56,7 @@ export default function ExamRunner() {
     setSubmitting(true);
     setError("");
     try {
-      const update = await submitExam({ uid: user.uid, exam, answers });
+      const update = await submitExam({ uid: user.uid, exam, answers, durationSec: elapsed });
       setExam({ ...exam, ...update });
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
@@ -66,8 +75,8 @@ export default function ExamRunner() {
         <div>
           <h1>{exam.title}</h1>
           <span className="muted small">
-            {exam.kind === "weekly" ? "Weekly recap" : "Daily exam"} · {EXAM_MODES[exam.mode]?.label} ·{" "}
-            {formatDate(exam.createdAt)} · {exam.lessonTitles?.join(", ")}
+            {exam.kind === "weekly" ? "Weekly recap" : "Daily exam"} · {EXAM_MODES[exam.mode]?.label}
+            {exam.difficulty ? ` · ${exam.difficulty}` : ""} · {formatDate(exam.createdAt)} · {exam.lessonTitles?.join(", ")}
           </span>
         </div>
         <Link to={exam.kind === "weekly" ? "/weekly" : "/daily"} className="btn sm ghost">← Back</Link>
@@ -104,7 +113,10 @@ export default function ExamRunner() {
 
       {!done && (
         <div className="card spread">
-          <span className="muted">{answered} of {exam.questions.length} answered</span>
+          <span className="muted">
+            {answered} of {exam.questions.length} answered ·{" "}
+            <span className="exam-timer">{String(Math.floor(elapsed / 60)).padStart(2, "0")}:{String(elapsed % 60).padStart(2, "0")}</span>
+          </span>
           <button className="btn primary lg" onClick={onSubmit} disabled={submitting}>
             {submitting ? (exam.mode === "mcq" ? "Checking..." : "Grading with AI...") : "Submit exam"}
           </button>

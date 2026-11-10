@@ -7,11 +7,12 @@ import { createExam, updateExam } from "./db";
  * Generates questions from the given lessons and stores a new exam.
  * @returns {Promise<string>} the new exam id
  */
-export async function startExam({ uid, lessons, mode, count, kind, topic }) {
-  const exam = await generateExam(lessons, mode, count, kind);
+export async function startExam({ uid, lessons, mode, count, kind, topic, difficulty = "medium" }) {
+  const exam = await generateExam(lessons, mode, count, kind, difficulty);
   return createExam(uid, {
     kind,
     mode,
+    difficulty,
     topic: topic || lessons.map((l) => l.topic).filter(Boolean)[0] || "General",
     title: exam.title,
     lessonIds: lessons.map((l) => l.id),
@@ -23,7 +24,7 @@ export async function startExam({ uid, lessons, mode, count, kind, topic }) {
 /**
  * Grades the answers, saves the result, and returns the updated fields.
  */
-export async function submitExam({ uid, exam, answers }) {
+export async function submitExam({ uid, exam, answers, durationSec = null }) {
   const { questions, mode } = exam;
   let results;
   let overallFeedback = "";
@@ -62,6 +63,7 @@ export async function submitExam({ uid, exam, answers }) {
     overallFeedback,
     score,
     total: questions.length,
+    durationSec,
     completedAt: new Date(),
   };
   await updateExam(uid, exam.id, update);

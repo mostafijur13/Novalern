@@ -7,8 +7,14 @@ import { useAuth } from "../context/AuthContext";
 import ErrorBanner from "./ErrorBanner";
 import Spinner from "./Spinner";
 
+const DIFFICULTIES = [
+  { key: "easy", label: "Easy", hint: "Key facts and definitions" },
+  { key: "medium", label: "Medium", hint: "Understanding and examples" },
+  { key: "hard", label: "Hard", hint: "Apply it to new problems" },
+];
+
 /**
- * Pick lessons + exam mode + length, then generate and open the exam.
+ * Pick lessons + exam mode + difficulty + length, then generate and open the exam.
  * Used by Daily Exam (choose from last lessons) and Weekly Recap (lessons of a topic).
  */
 export default function ExamSetup({ lessons, kind, topic, initialSelected }) {
@@ -16,6 +22,7 @@ export default function ExamSetup({ lessons, kind, topic, initialSelected }) {
   const navigate = useNavigate();
   const [selected, setSelected] = useState(() => new Set(initialSelected || lessons.slice(0, 1).map((l) => l.id)));
   const [mode, setMode] = useState("mcq");
+  const [difficulty, setDifficulty] = useState("medium");
   const [count, setCount] = useState(5);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -38,7 +45,7 @@ export default function ExamSetup({ lessons, kind, topic, initialSelected }) {
     setBusy(true);
     setError("");
     try {
-      const id = await startExam({ uid: user.uid, lessons: chosen, mode, count, kind, topic });
+      const id = await startExam({ uid: user.uid, lessons: chosen, mode, count, kind, topic, difficulty });
       navigate(`/exam/${id}`);
     } catch (err) {
       setError(err.message || "Could not create the exam.");
@@ -55,11 +62,13 @@ export default function ExamSetup({ lessons, kind, topic, initialSelected }) {
     );
   }
 
+  const estMinutes = Math.max(2, Math.round(count * (mode === "mcq" ? 0.5 : 1.2)));
+
   return (
     <div className="card">
       <ErrorBanner message={error} onClose={() => setError("")} />
 
-      <h3>1. Which lessons?</h3>
+      <div className="step-title"><span className="step-num">1</span><h3>Which lessons?</h3></div>
       <ul className="check-list" style={{ marginBottom: 18 }}>
         {lessons.map((l) => (
           <li key={l.id}>
@@ -74,7 +83,7 @@ export default function ExamSetup({ lessons, kind, topic, initialSelected }) {
         ))}
       </ul>
 
-      <h3>2. How do you want to answer?</h3>
+      <div className="step-title"><span className="step-num">2</span><h3>How do you want to answer?</h3></div>
       <div className="mode-grid" style={{ marginBottom: 18 }}>
         {Object.entries(EXAM_MODES).map(([key, m]) => {
           const disabled = key === "voice" && !speechRecognitionSupported;
@@ -94,13 +103,24 @@ export default function ExamSetup({ lessons, kind, topic, initialSelected }) {
         })}
       </div>
 
-      <h3>3. How many questions?</h3>
+      <div className="step-title"><span className="step-num">3</span><h3>How hard?</h3></div>
+      <div className="mode-grid" style={{ marginBottom: 18 }}>
+        {DIFFICULTIES.map((d) => (
+          <button key={d.key} type="button" className={"mode-card" + (difficulty === d.key ? " selected" : "")} onClick={() => setDifficulty(d.key)}>
+            <strong>{d.label}</strong>
+            <span className="muted small">{d.hint}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="step-title"><span className="step-num">4</span><h3>How many questions?</h3></div>
       <div className="row" style={{ marginBottom: 22 }}>
         {[5, 10, 15].map((n) => (
           <button key={n} type="button" className={"btn sm " + (count === n ? "" : "ghost")} onClick={() => setCount(n)}>
             {n}
           </button>
         ))}
+        <span className="muted small">about {estMinutes} min</span>
       </div>
 
       <button className="btn primary lg" onClick={start} disabled={!selected.size}>

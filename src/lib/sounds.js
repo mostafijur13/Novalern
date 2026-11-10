@@ -16,9 +16,9 @@ const VOLUME = 0.35;
 const CATEGORIES = {
   whoosh: { query: "whoosh swoosh transition", maxDuration: 2 },
   pop: { query: "pop bubble cartoon", maxDuration: 1.5 },
-  chime: { query: "chime success bell", maxDuration: 3 },
-  ding: { query: "ding correct notification", maxDuration: 2 },
-  buzz: { query: "wrong buzzer short", maxDuration: 2 },
+  chime: { query: "success chime", maxDuration: 3 },
+  ding: { query: "ding", maxDuration: 2 },
+  buzz: { query: "buzzer wrong", maxDuration: 2 },
 };
 
 const library = new Map(); // category -> Promise<string[]> preview URLs

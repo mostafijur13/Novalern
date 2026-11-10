@@ -96,7 +96,7 @@ Tips: record in Chrome with the sound on, keep the browser at full screen, and p
 
 ## Inspiration
 
-I kept watching the same thing happen to friends and younger students: they'd sit with a textbook open, read the same paragraph three times, and still not get it. Then they'd try an AI chatbot and get back an even longer paragraph. The explanation was technically there, but nobody was going to absorb it at 11pm on a phone.
+We kept watching the same thing happen to friends and younger students: they'd sit with a textbook open, read the same paragraph three times, and still not get it. Then they'd try an AI chatbot and get back an even longer paragraph. The explanation was technically there, but nobody was going to absorb it at 11pm on a phone.
 
 What actually works for most people is being shown and told, in small steps, by someone who sounds like they want you to get it. A good teacher at a whiteboard. A YouTube explainer. That's where Novalern came from: what if the AI's answer was a short video instead of a wall of text? And what if it followed up the next day to check you still remembered it, the way a good tutor would?
 
@@ -106,40 +106,40 @@ You bring your lesson in whatever form you have it: type a question, say it into
 
 Every session is saved as a lesson with its own title and topic. From those lessons, Novalern builds a daily exam. You pick how to answer: multiple choice, typing, or just talking, where the question is read to you and you speak your answer. Multiple choice is marked instantly. Written and spoken answers are graded by AI, with a line of feedback and a model answer for each one. At the end of the week, everything you studied is grouped by topic and you get a recap exam on whichever topic you choose. Your scores and progress build up on your profile.
 
-## How I built it
+## How we built it
 
 The frontend is React with Vite. Sign-in and storage are Firebase: Authentication for email and Google login, and Firestore for lessons and exams, with security rules so each user can only ever read their own data.
 
-The trick that makes the video possible is not asking the model for text. I ask it for structured data: a title and a list of scenes, each with narration, a caption, bullet points, an image search query, a sticker keyword and an animation style. The model runs on Groq (gpt-oss-120b for lessons, exams and grading; a Qwen vision model when there's a photo or a scanned page), and I use JSON-schema structured output so the shape is guaranteed. The player then renders those scenes as a video.
+The trick that makes the video possible is not asking the model for text. We ask it for structured data: a title and a list of scenes, each with narration, a caption, bullet points, an image search query, a sticker keyword and an animation style. The model runs on Groq (gpt-oss-120b for lessons, exams and grading, and a Qwen vision model when there's a photo or a scanned page), with JSON-schema structured output so the shape is guaranteed. The player then renders those scenes as a video.
 
-Pictures come from Wikimedia Commons and Wikipedia, with Google Images as an option, because the search query the model writes is specific enough ("xylem water transport diagram") to find real diagrams. Stickers are from the Giphy Stickers API. Narration uses Groq's Orpheus text-to-speech model, with the browser's own speech synthesis as a fallback, and voice input uses the Web Speech API. PDFs are read in the browser with pdf.js; scanned PDFs get rendered to images and sent to the vision model. Sound effects are synthesized with the Web Audio API, with Freesound as an optional source. The app is hosted on Vercel, and the AI calls go through small serverless functions there so no API key is ever in the browser.
+Pictures come from Wikimedia Commons and Wikipedia, with Google Images as an option, because the search query the model writes is specific enough ("xylem water transport diagram") to find real diagrams. Stickers come from the Giphy Stickers API. Narration uses Groq's Orpheus text-to-speech model, with the browser's own speech synthesis as a fallback, and voice input uses the Web Speech API. PDFs are read in the browser with pdf.js; scanned PDFs are rendered to images and sent to the vision model. Sound effects are synthesized with the Web Audio API, with Freesound as an optional source. The app is hosted on Vercel, and the AI calls go through small serverless functions there so no API key is ever in the browser.
 
-## Challenges I ran into
+## Challenges we ran into
 
-**The first version was boring.** A chat bubble with a long markdown answer. It worked, but it wasn't what I wanted anyone to learn from. Restructuring the whole AI layer around scenes instead of text, and then building a player that felt like a video rather than a slideshow, took most of the project.
+**The first version was boring.** A chat bubble with a long markdown answer. It worked, but it wasn't something anyone would learn from. Restructuring the whole AI layer around scenes instead of text, and then building a player that felt like a video rather than a slideshow, took most of the project.
 
-**Choosing a model API, three times.** I started with one provider, switched to Meta's Model API, hit a billing wall, and finally landed on Groq, which was fast and had vision, structured output and text-to-speech under one key. Each switch meant rewriting the request shapes and re-testing images and PDFs.
+**Choosing a model API, three times.** We started with one provider, switched to Meta's Model API, hit a billing wall, and finally landed on Groq, which was fast and had vision, structured output and text-to-speech under one key. Each switch meant rewriting the request shapes and re-testing images and PDFs.
 
-**Text-to-speech limits.** The TTS model takes at most 200 characters per request and has a low rate limit. I had to make the model keep every scene's narration short, chunk anything longer, request audio one scene at a time while the previous one plays, cache everything, and fall back to the browser voice without breaking the flow.
+**Text-to-speech limits.** The TTS model takes at most 200 characters per request and has a low rate limit. We had to make the model keep every scene's narration short, chunk anything longer, request audio one scene at a time while the previous one plays, cache everything, and fall back to the browser voice without breaking the flow.
 
 **Pictures that are actually relevant.** A generic word like "leaf" gives you a random leaf. Getting the model to write precise image queries, and discovering that Commons file search beats Wikipedia's lead image for diagrams, made a big difference.
 
-**Deploying.** Environment variables that worked locally weren't on Vercel, the Firebase function I'd planned on wasn't available on the free plan, and the app sat there saying "internal [0]". Moving the key-holding code to Vercel serverless functions fixed it properly.
+**Deploying.** Environment variables that worked locally weren't on Vercel, the Firebase function we'd planned on wasn't available on the free plan, and the live app just said "internal [0]". Moving the key-holding code into Vercel serverless functions fixed it properly.
 
-## Accomplishments that I'm proud of
+## Accomplishments that we're proud of
 
 - Lessons that genuinely play like short videos, from a photo of a page, with a voice, pictures and motion, in a few seconds.
 - Three ways to take an exam, including answering by speaking, with AI grading that gives real feedback instead of just a score.
 - The whole learn-then-test loop working end to end: lesson today, daily exam, weekly recap, progress on the profile.
 - Shipping it with keys kept on the server, per-user data rules, and graceful fallbacks so nothing hard-fails when a sticker, picture or voice isn't available.
 
-## What I learned
+## What we learned
 
 Asking a model for structured data instead of prose changes what you can build with it. Once the lesson was a list of scenes, everything else, the player, the narration, the pictures, the exams, became ordinary frontend work.
 
-I also learned a lot about the gap between "works in the demo" and "works for a real student": rate limits, browser autoplay rules, speech APIs that only exist in some browsers, hotlink-protected images, and environment variables that silently don't exist in production. Most of the project's robustness came from assuming every external service might say no.
+We also learned a lot about the gap between "works in the demo" and "works for a real student": rate limits, browser autoplay rules, speech APIs that only exist in some browsers, hotlink-protected images, and environment variables that silently don't exist in production. Most of the project's robustness came from assuming every external service might say no.
 
-## What's next for Novalern
+## What's next for novalern
 
 - Spaced repetition: schedule exam questions based on what you got wrong, not just what you studied recently.
 - Share a lesson: send a generated video lesson to a classmate or a study group.
