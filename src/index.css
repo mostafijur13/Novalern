@@ -265,62 +265,101 @@ textarea.input { resize: vertical; min-height: 90px; }
 .player { width: 100%; }
 .stage {
   position: relative; aspect-ratio: 16 / 9; border-radius: 16px; overflow: hidden; cursor: pointer;
-  background: var(--navy); color: #fff; user-select: none; isolation: isolate;
+  color: #fff; user-select: none; isolation: isolate;
+  background: var(--stage-a, #0f172a);
+  transition: background 1.2s ease;
 }
+/* colour themes, one per scene */
+.theme-0 { --stage-a: #0f172a; --stage-b: #a3e635; --stage-c: #6366f1; }
+.theme-1 { --stage-a: #1e1b4b; --stage-b: #f472b6; --stage-c: #22d3ee; }
+.theme-2 { --stage-a: #052e16; --stage-b: #facc15; --stage-c: #34d399; }
+.theme-3 { --stage-a: #3b0764; --stage-b: #fb923c; --stage-c: #a78bfa; }
+.theme-4 { --stage-a: #083344; --stage-b: #a3e635; --stage-c: #38bdf8; }
+.theme-5 { --stage-a: #431407; --stage-b: #fde047; --stage-c: #f87171; }
+
 .stage-bg { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
-.blob { position: absolute; border-radius: 50%; filter: blur(40px); opacity: 0.55; animation: drift 14s ease-in-out infinite alternate; }
-.blob.b1 { width: 45%; aspect-ratio: 1; background: #a3e635; top: -15%; right: -10%; }
-.blob.b2 { width: 40%; aspect-ratio: 1; background: #6366f1; bottom: -20%; left: -10%; animation-duration: 18s; }
-.blob.b3 { width: 25%; aspect-ratio: 1; background: #22d3ee; top: 40%; left: 40%; opacity: 0.25; animation-duration: 22s; }
+.blob { position: absolute; border-radius: 50%; filter: blur(40px); opacity: 0.6; transition: background 1.2s ease; animation: drift 14s ease-in-out infinite alternate; }
+.blob.b1 { width: 45%; aspect-ratio: 1; background: var(--stage-b); top: -15%; right: -10%; }
+.blob.b2 { width: 40%; aspect-ratio: 1; background: var(--stage-c); bottom: -20%; left: -10%; animation-duration: 18s; }
+.blob.b3 { width: 25%; aspect-ratio: 1; background: var(--stage-c); top: 40%; left: 40%; opacity: 0.25; animation-duration: 22s; }
+
 .stage-badge {
-  position: absolute; top: 14px; left: 16px; z-index: 2; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em;
-  text-transform: uppercase; color: var(--lime); max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  position: absolute; top: 14px; left: 16px; z-index: 3; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--stage-b); max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.5);
 }
-.stage-body { position: absolute; inset: 44px 24px 26px; z-index: 1; display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: 18px; }
+.mute-btn {
+  position: absolute; top: 10px; right: 12px; z-index: 4; width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.25); background: rgba(15,23,42,0.5); color: #fff; font-size: 0.95rem;
+}
+
+/* layouts: where the picture sits */
+.stage-body { position: absolute; inset: 44px 24px 26px; z-index: 2; display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: 18px; }
+.layout-left .stage-body { grid-template-columns: 1fr 1.1fr; }
+.layout-left .stage-text { order: 2; }
+.layout-left .stage-visual { order: 1; }
+.layout-top .stage-body { grid-template-columns: 1fr; grid-template-rows: 1.2fr auto; }
+.layout-top .stage-visual { order: 1; }
+.layout-top .stage-text { order: 2; text-align: center; }
+.layout-top .stage-bullets { align-items: center; }
+.layout-top .stage-bullets li { padding-left: 0; }
+.layout-top .stage-bullets li::before { display: none; }
+.layout-top .stage-image { max-height: 100%; }
+.layout-cover .stage-body { grid-template-columns: 1fr; align-items: end; inset: 44px 24px 30px; }
+.layout-cover .stage-visual { position: absolute; right: 0; bottom: 0; width: 110px; height: 110px; }
+.layout-cover .stage-text { max-width: 78%; }
+.layout-none .stage-body { grid-template-columns: 1.3fr 1fr; }
+.stage-cover { position: absolute; inset: 0; z-index: 1; }
+.stage-cover .stage-image { width: 100%; height: 100%; border-radius: 0; border: 0; box-shadow: none; animation: reveal-fade 0.8s ease both, kenburns-wide 14s ease-in-out both; }
+.stage-cover::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15,23,42,0.25) 0%, rgba(15,23,42,0.55) 55%, rgba(15,23,42,0.9) 100%); }
+
 .stage-text { min-width: 0; }
 .stage-caption {
   font-size: clamp(1.15rem, 3vw, 2rem); font-weight: 800; line-height: 1.15; letter-spacing: -0.01em;
-  text-shadow: 0 2px 12px rgba(0,0,0,0.35); animation: rise 0.55s ease both;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.45); animation: rise 0.55s ease both;
 }
 .stage-bullets { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .stage-bullets li {
-  font-size: clamp(0.85rem, 1.7vw, 1.02rem); color: #e2e8f0; padding-left: 16px; position: relative;
-  animation: rise 0.5s ease both; text-shadow: 0 1px 8px rgba(0,0,0,0.35);
+  font-size: clamp(0.85rem, 1.7vw, 1.02rem); color: #f1f5f9; padding-left: 16px; position: relative;
+  animation: rise 0.5s ease both; text-shadow: 0 1px 8px rgba(0,0,0,0.45);
 }
-.stage-bullets li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 7px; height: 7px; border-radius: 50%; background: var(--lime); }
+.stage-bullets li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 7px; height: 7px; border-radius: 50%; background: var(--stage-b); }
 
 /* entrance effects, chosen per scene by the AI */
-.fx-slide .stage-caption { animation-name: slide-in; }
-.fx-slide .stage-bullets li { animation-name: slide-in; }
-.fx-zoom .stage-caption { animation-name: zoom-in; }
-.fx-zoom .stage-bullets li { animation-name: zoom-in; }
+.fx-slide .stage-caption, .fx-slide .stage-bullets li { animation-name: slide-in; }
+.fx-zoom .stage-caption, .fx-zoom .stage-bullets li { animation-name: zoom-in; }
 .fx-bounce .stage-caption { animation: bounce-in 0.7s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
 .fx-bounce .stage-bullets li { animation-name: bounce-in; animation-timing-function: cubic-bezier(0.2, 1.5, 0.4, 1); }
 
 .stage-visual { position: relative; height: 100%; min-height: 0; display: grid; place-items: center; }
 .stage-image {
   width: 100%; height: 100%; object-fit: cover; border-radius: 14px; border: 2px solid rgba(255,255,255,0.18);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.45); animation: reveal 0.6s ease both, kenburns 12s ease-in-out both;
-  background: #0b1220;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.45); background: #0b1220;
+  animation: reveal 0.6s ease both, float-pan 12s ease-in-out both;
 }
+.layout-left .stage-image { animation: reveal-left 0.6s ease both, float-pan-left 12s ease-in-out both; }
+.layout-top .stage-image { animation: reveal-fade 0.6s ease both, float-pan 12s ease-in-out both; }
 .stage-sticker.solo img { max-width: 100%; max-height: 100%; object-fit: contain; animation: pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both, wobble 4s ease-in-out 1s infinite; filter: drop-shadow(0 8px 20px rgba(0,0,0,0.35)); }
 .stage-sticker.badge {
   position: absolute; right: -8px; bottom: -8px; width: 34%; max-width: 120px; aspect-ratio: 1;
   animation: pop 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) 0.4s both;
 }
+.layout-left .stage-sticker.badge { right: auto; left: -8px; }
+.layout-top .stage-sticker.badge { right: 8%; bottom: 10%; max-width: 90px; }
 .stage-sticker.badge img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 6px 14px rgba(0,0,0,0.45)); animation: wobble 4s ease-in-out 1s infinite; }
-.stage-sticker-placeholder { font-size: 3rem; color: var(--lime); opacity: 0.6; animation: pulse-soft 2s ease-in-out infinite; }
+.layout-cover .stage-sticker.solo { width: 100%; height: 100%; }
+.stage-sticker-placeholder { font-size: 3rem; color: var(--stage-b); opacity: 0.6; animation: pulse-soft 2s ease-in-out infinite; }
 
 .stage-overlay {
   position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 6px; background: rgba(15, 23, 42, 0.45); font-weight: 600; backdrop-filter: blur(2px);
 }
-.play-big { width: 64px; height: 64px; border-radius: 50%; background: var(--lime); color: var(--navy); display: grid; place-items: center; font-size: 1.6rem; animation: pulse-soft 1.8s ease-in-out infinite; }
-.stage-progress { position: absolute; left: 16px; right: 16px; bottom: 10px; z-index: 2; display: flex; gap: 4px; }
+.play-big { width: 64px; height: 64px; border-radius: 50%; background: var(--stage-b); color: #0f172a; display: grid; place-items: center; font-size: 1.6rem; animation: pulse-soft 1.8s ease-in-out infinite; }
+.stage-progress { position: absolute; left: 16px; right: 16px; bottom: 10px; z-index: 3; display: flex; gap: 4px; }
 .stage-progress span { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.25); overflow: hidden; position: relative; }
-.stage-progress span.done { background: var(--lime); }
-.stage-progress span.current { background: rgba(163, 230, 53, 0.5); }
-.stage-progress span.active::after { content: ""; position: absolute; inset: 0; background: var(--lime); transform-origin: left; animation: fill 5s linear forwards; }
+.stage-progress span.done { background: var(--stage-b); }
+.stage-progress span.current { background: rgba(255,255,255,0.5); }
+.stage-progress span.active::after { content: ""; position: absolute; inset: 0; background: var(--stage-b); transform-origin: left; animation: fill 5s linear forwards; }
 .player-controls { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .transcript { margin: 10px 0 0; padding-left: 20px; font-size: 0.9rem; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
 .transcript li { cursor: pointer; }
@@ -333,7 +372,19 @@ textarea.input { resize: vertical; min-height: 90px; }
 @keyframes bounce-in { from { opacity: 0; transform: translateY(30px) scale(0.9); } to { opacity: 1; transform: none; } }
 @keyframes pop { from { opacity: 0; transform: scale(0.5) rotate(-8deg); } to { opacity: 1; transform: none; } }
 @keyframes reveal { from { opacity: 0; clip-path: inset(0 100% 0 0 round 14px); } to { opacity: 1; clip-path: inset(0 0 0 0 round 14px); } }
-@keyframes kenburns { from { object-position: 40% 50%; transform: scale(1); } to { object-position: 60% 45%; transform: scale(1.12); } }
+@keyframes reveal-left { from { opacity: 0; clip-path: inset(0 0 0 100% round 14px); } to { opacity: 1; clip-path: inset(0 0 0 0 round 14px); } }
+@keyframes reveal-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes float-pan {
+  0% { object-position: 35% 50%; transform: scale(1) translate(0, 0) rotate(0deg); }
+  50% { object-position: 55% 45%; transform: scale(1.08) translate(-6px, 8px) rotate(-1deg); }
+  100% { object-position: 65% 55%; transform: scale(1.14) translate(8px, -6px) rotate(1deg); }
+}
+@keyframes float-pan-left {
+  0% { object-position: 65% 50%; transform: scale(1) translate(0, 0) rotate(0deg); }
+  50% { object-position: 45% 55%; transform: scale(1.08) translate(6px, -8px) rotate(1deg); }
+  100% { object-position: 35% 45%; transform: scale(1.14) translate(-8px, 6px) rotate(-1deg); }
+}
+@keyframes kenburns-wide { from { transform: scale(1.02); object-position: 40% 50%; } to { transform: scale(1.15); object-position: 60% 40%; } }
 @keyframes wobble { 0%, 100% { transform: rotate(-4deg) translateY(0); } 50% { transform: rotate(4deg) translateY(-6px); } }
 @keyframes drift { from { transform: translate(0, 0) scale(1); } to { transform: translate(8%, 10%) scale(1.15); } }
 @keyframes pulse-soft { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
@@ -341,8 +392,11 @@ textarea.input { resize: vertical; min-height: 90px; }
 
 @media (max-width: 600px) {
   .stage { aspect-ratio: 4 / 3; }
-  .stage-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; inset: 40px 16px 24px; gap: 10px; }
+  .stage-body, .layout-left .stage-body, .layout-top .stage-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; inset: 40px 16px 24px; gap: 10px; }
+  .layout-left .stage-text, .layout-top .stage-text { order: 2; }
+  .layout-left .stage-visual, .layout-top .stage-visual { order: 1; }
   .stage-visual { height: auto; min-height: 110px; }
   .stage-image { max-height: 150px; }
   .stage-sticker.badge { max-width: 80px; }
+  .layout-cover .stage-text { max-width: 100%; }
 }

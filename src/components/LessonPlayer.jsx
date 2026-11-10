@@ -3,12 +3,17 @@ import { randomSticker, stickersEnabled } from "../lib/stickers";
 import { findImage } from "../lib/images";
 import { narrate, speechSynthesisSupported, stopNarration } from "../lib/speech";
 import { prefetchNarration } from "../lib/tts";
+import { playSfx, preloadSfx, setSfxMuted, sfxMuted } from "../lib/sounds";
 
 const EFFECTS = ["fade", "slide", "zoom", "bounce"];
+// Where the picture sits on each scene. Cycles so the layout keeps changing.
+const LAYOUTS = ["right", "left", "cover", "top", "right", "cover", "left", "top"];
+const THEMES = 6; // colour themes defined in CSS as .theme-0 ... .theme-5
 
 /**
  * Plays a lesson script like a video: one scene at a time, narrated, with a real
- * picture (slow zoom), a sticker badge, animated captions and auto-advance.
+ * picture that moves around the stage, a sticker badge, animated captions,
+ * colour themes that change per scene, sound effects and auto-advance.
  */
 export default function LessonPlayer({ script, autoplay = false }) {
   const scenes = script.scenes;
@@ -17,20 +22,22 @@ export default function LessonPlayer({ script, autoplay = false }) {
   const [stickers, setStickers] = useState({});
   const [images, setImages] = useState({});
   const [showTranscript, setShowTranscript] = useState(false);
+  const [muted, setMuted] = useState(sfxMuted());
   const runId = useRef(0);
+  const firstRender = useRef(true);
   const scene = scenes[index];
   const atEnd = index >= scenes.length - 1;
 
   // Prefetch visuals for every scene once.
   useEffect(() => {
     let cancelled = false;
+    preloadSfx();
     scenes.forEach((s, i) => {
       if (stickersEnabled) {
         randomSticker(s.sticker).then((st) => {
           if (!cancelled) setStickers((prev) => ({ ...prev, [i]: st || false }));
         });
       }
-      // Lessons saved before image support have no imageQuery: use the caption instead.
       const query = s.imageQuery === undefined ? s.caption : s.imageQuery;
       findImage(query || "").then((img) => {
         if (!cancelled) setImages((prev) => ({ ...prev, [i]: img || false }));
@@ -40,6 +47,18 @@ export default function LessonPlayer({ script, autoplay = false }) {
       cancelled = true;
     };
   }, [scenes]);
+
+  // Sound on scene change (not on first paint).
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    if (!playing) return;
+    playSfx(index === scenes.length - 1 ? "chime" : "whoosh");
+    const t = setTimeout(() => playSfx("pop"), 450);
+    return () => clearTimeout(t);
+  }, [index, playing, scenes.length]);
 
   // Narrate the current scene while playing, then advance.
   useEffect(() => {
@@ -85,9 +104,18 @@ export default function LessonPlayer({ script, autoplay = false }) {
     setPlaying((p) => !p);
   }
 
+  function toggleMute(e) {
+    e.stopPropagation();
+    const next = !muted;
+    setMuted(next);
+    setSfxMuted(next);
+  }
+
   const sticker = stickers[index] || null;
   const image = images[index] || null;
   const effect = EFFECTS.includes(scene.effect) ? scene.effect : EFFECTS[index % EFFECTS.length];
+  const layout = image ? LAYOUTS[index % LAYOUTS.length] : "none";
+  const theme = index % THEMES;
 
   const stickerStatus = !stickersEnabled
     ? "off (no Giphy key in this build)"
@@ -101,12 +129,23 @@ export default function LessonPlayer({ script, autoplay = false }) {
 
   return (
     <div className="player">
-      <div className={`stage fx-${effect} ${image ? "has-image" : ""}`} onClick={togglePlay} role="button" aria-label={playing ? "Pause" : "Play"}>
+      <div
+        className={`stage fx-${effect} layout-${layout} theme-${theme}`}
+        onClick={togglePlay}
+        role="button"
+        aria-label={playing ? "Pause" : "Play"}
+      >
         <div className="stage-bg">
           <span className="blob b1" />
           <span className="blob b2" />
           <span className="blob b3" />
         </div>
+
+        {image && layout === "cover" && (
+          <div className="stage-cover" key={`cover-${index}`}>
+            <SceneImage image={image} alt={scene.imageQuery} />
+          </div>
+        )}
 
         <div className="stage-badge">{script.title}</div>
 
@@ -123,18 +162,22 @@ export default function LessonPlayer({ script, autoplay = false }) {
           </div>
 
           <div className="stage-visual">
-            {image ? (
+            {image && layout !== "cover" ? (
               <SceneImage key={`img-${index}`} image={image} alt={scene.imageQuery} />
-            ) : sticker ? null : (
+            ) : !image && !sticker ? (
               <span className="stage-sticker-placeholder">✦</span>
-            )}
+            ) : null}
             {sticker && (
-              <div className={"stage-sticker" + (image ? " badge" : " solo")}>
+              <div className={"stage-sticker" + (image && layout !== "cover" ? " badge" : " solo")}>
                 <img src={sticker.url} alt={sticker.title} />
               </div>
             )}
           </div>
         </div>
+
+        <button className="mute-btn" onClick={toggleMute} title={muted ? "Unmute sound effects" : "Mute sound effects"}>
+          {muted ? "🔇" : "🔊"}
+        </button>
 
         {!playing && (
           <div className="stage-overlay">
@@ -164,7 +207,7 @@ export default function LessonPlayer({ script, autoplay = false }) {
         </button>
       </div>
       <div className="muted small" style={{ marginTop: 4 }}>
-        Picture: {imageStatus} · Sticker: {stickerStatus} · Effect: {effect}
+        Picture: {imageStatus} · Sticker: {stickerStatus} · Effect: {effect} · Layout: {layout}
       </div>
 
       {!speechSynthesisSupported && (
