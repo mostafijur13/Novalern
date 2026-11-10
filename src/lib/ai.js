@@ -251,10 +251,19 @@ const SCRIPT_SCHEMA = {
           },
           sticker: {
             type: "string",
-            description: "1-3 plain English words for a fun sticker that matches the scene, e.g. 'light bulb', 'plant growing', 'thumbs up', 'question mark'.",
+            description: "1-3 plain English words for a fun animated sticker that matches the mood of the scene, e.g. 'light bulb', 'thumbs up', 'thinking', 'celebration'.",
+          },
+          imageQuery: {
+            type: "string",
+            description: "2-5 word image search query for a REAL photo or diagram that precisely shows what this scene explains, e.g. 'chloroplast diagram', 'water cycle diagram', 'Eiffel Tower', 'right triangle hypotenuse'. Empty string if no real picture fits (e.g. pure math steps).",
+          },
+          effect: {
+            type: "string",
+            enum: ["fade", "slide", "zoom", "bounce"],
+            description: "Entrance animation for the scene text. Vary it across scenes.",
           },
         },
-        required: ["narration", "caption", "bullets", "sticker"],
+        required: ["narration", "caption", "bullets", "sticker", "imageQuery", "effect"],
         additionalProperties: false,
       },
     },
@@ -274,7 +283,9 @@ Rules:
 - Teach step by step at the student's level. For problems, work through the solution and state the final answer clearly.
 - narration: natural spoken language, 1-2 sentences and at most 200 characters, no markdown, no bullet symbols. Spell out formulas in words when spoken (e.g. "x squared plus two x").
 - caption: max 8 words. bullets: the key facts or formula of the scene, max 3 lines.
-- sticker: a concrete, cheerful visual idea in 1-3 words.
+- imageQuery: the most precise search for a real photo or labelled diagram that illustrates THIS scene (the specific object, place, organism, process or diagram), not a generic word. Leave empty only when no real picture would help.
+- sticker: a cheerful mood sticker in 1-3 words (reaction, emotion, celebration) - it is decoration, the imageQuery carries the meaning.
+- effect: rotate between fade, slide, zoom and bounce so consecutive scenes feel different.
 - Reply in the language the student writes in.`;
 
 /**

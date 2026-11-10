@@ -265,49 +265,84 @@ textarea.input { resize: vertical; min-height: 90px; }
 .player { width: 100%; }
 .stage {
   position: relative; aspect-ratio: 16 / 9; border-radius: 16px; overflow: hidden; cursor: pointer;
-  background: var(--navy); color: #fff; user-select: none;
-  background-image: radial-gradient(circle at 85% 15%, rgba(163, 230, 53, 0.28), transparent 40%),
-    radial-gradient(circle at 10% 90%, rgba(99, 102, 241, 0.25), transparent 45%);
+  background: var(--navy); color: #fff; user-select: none; isolation: isolate;
 }
+.stage-bg { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
+.blob { position: absolute; border-radius: 50%; filter: blur(40px); opacity: 0.55; animation: drift 14s ease-in-out infinite alternate; }
+.blob.b1 { width: 45%; aspect-ratio: 1; background: #a3e635; top: -15%; right: -10%; }
+.blob.b2 { width: 40%; aspect-ratio: 1; background: #6366f1; bottom: -20%; left: -10%; animation-duration: 18s; }
+.blob.b3 { width: 25%; aspect-ratio: 1; background: #22d3ee; top: 40%; left: 40%; opacity: 0.25; animation-duration: 22s; }
 .stage-badge {
-  position: absolute; top: 14px; left: 16px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em;
+  position: absolute; top: 14px; left: 16px; z-index: 2; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em;
   text-transform: uppercase; color: var(--lime); max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.stage-body { position: absolute; inset: 44px 24px 26px; display: grid; grid-template-columns: 1.4fr 1fr; align-items: center; gap: 16px; }
+.stage-body { position: absolute; inset: 44px 24px 26px; z-index: 1; display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: 18px; }
 .stage-text { min-width: 0; }
 .stage-caption {
-  font-size: clamp(1.2rem, 3.2vw, 2.1rem); font-weight: 800; line-height: 1.15; letter-spacing: -0.01em;
-  animation: rise 0.5s ease both;
+  font-size: clamp(1.15rem, 3vw, 2rem); font-weight: 800; line-height: 1.15; letter-spacing: -0.01em;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.35); animation: rise 0.55s ease both;
 }
 .stage-bullets { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .stage-bullets li {
-  font-size: clamp(0.85rem, 1.8vw, 1.05rem); color: #e2e8f0; padding-left: 16px; position: relative;
-  animation: rise 0.5s ease both;
+  font-size: clamp(0.85rem, 1.7vw, 1.02rem); color: #e2e8f0; padding-left: 16px; position: relative;
+  animation: rise 0.5s ease both; text-shadow: 0 1px 8px rgba(0,0,0,0.35);
 }
 .stage-bullets li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 7px; height: 7px; border-radius: 50%; background: var(--lime); }
-.stage-sticker { display: grid; place-items: center; min-height: 0; }
-.stage-sticker img { max-width: 100%; max-height: 100%; object-fit: contain; animation: pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both; filter: drop-shadow(0 8px 20px rgba(0,0,0,0.35)); }
-.stage-sticker-placeholder { font-size: 3rem; color: var(--lime); opacity: 0.6; }
+
+/* entrance effects, chosen per scene by the AI */
+.fx-slide .stage-caption { animation-name: slide-in; }
+.fx-slide .stage-bullets li { animation-name: slide-in; }
+.fx-zoom .stage-caption { animation-name: zoom-in; }
+.fx-zoom .stage-bullets li { animation-name: zoom-in; }
+.fx-bounce .stage-caption { animation: bounce-in 0.7s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+.fx-bounce .stage-bullets li { animation-name: bounce-in; animation-timing-function: cubic-bezier(0.2, 1.5, 0.4, 1); }
+
+.stage-visual { position: relative; height: 100%; min-height: 0; display: grid; place-items: center; }
+.stage-image {
+  width: 100%; height: 100%; object-fit: cover; border-radius: 14px; border: 2px solid rgba(255,255,255,0.18);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.45); animation: reveal 0.6s ease both, kenburns 12s ease-in-out both;
+  background: #0b1220;
+}
+.stage-sticker.solo img { max-width: 100%; max-height: 100%; object-fit: contain; animation: pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both, wobble 4s ease-in-out 1s infinite; filter: drop-shadow(0 8px 20px rgba(0,0,0,0.35)); }
+.stage-sticker.badge {
+  position: absolute; right: -8px; bottom: -8px; width: 34%; max-width: 120px; aspect-ratio: 1;
+  animation: pop 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) 0.4s both;
+}
+.stage-sticker.badge img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 6px 14px rgba(0,0,0,0.45)); animation: wobble 4s ease-in-out 1s infinite; }
+.stage-sticker-placeholder { font-size: 3rem; color: var(--lime); opacity: 0.6; animation: pulse-soft 2s ease-in-out infinite; }
+
 .stage-overlay {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 6px; background: rgba(15, 23, 42, 0.45); font-weight: 600; backdrop-filter: blur(2px);
 }
-.play-big { width: 64px; height: 64px; border-radius: 50%; background: var(--lime); color: var(--navy); display: grid; place-items: center; font-size: 1.6rem; }
-.stage-progress { position: absolute; left: 16px; right: 16px; bottom: 10px; display: flex; gap: 4px; }
+.play-big { width: 64px; height: 64px; border-radius: 50%; background: var(--lime); color: var(--navy); display: grid; place-items: center; font-size: 1.6rem; animation: pulse-soft 1.8s ease-in-out infinite; }
+.stage-progress { position: absolute; left: 16px; right: 16px; bottom: 10px; z-index: 2; display: flex; gap: 4px; }
 .stage-progress span { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.25); overflow: hidden; position: relative; }
 .stage-progress span.done { background: var(--lime); }
 .stage-progress span.current { background: rgba(163, 230, 53, 0.5); }
-.stage-progress span.active::after { content: ""; position: absolute; inset: 0; background: var(--lime); transform-origin: left; animation: fill 4s linear forwards; }
+.stage-progress span.active::after { content: ""; position: absolute; inset: 0; background: var(--lime); transform-origin: left; animation: fill 5s linear forwards; }
 .player-controls { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .transcript { margin: 10px 0 0; padding-left: 20px; font-size: 0.9rem; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
 .transcript li { cursor: pointer; }
 .transcript li.current { color: var(--text); }
 .transcript li strong { color: var(--text); }
-@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-@keyframes pop { from { opacity: 0; transform: scale(0.6) rotate(-6deg); } to { opacity: 1; transform: none; } }
+
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes slide-in { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@keyframes zoom-in { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: none; } }
+@keyframes bounce-in { from { opacity: 0; transform: translateY(30px) scale(0.9); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: scale(0.5) rotate(-8deg); } to { opacity: 1; transform: none; } }
+@keyframes reveal { from { opacity: 0; clip-path: inset(0 100% 0 0 round 14px); } to { opacity: 1; clip-path: inset(0 0 0 0 round 14px); } }
+@keyframes kenburns { from { object-position: 40% 50%; transform: scale(1); } to { object-position: 60% 45%; transform: scale(1.12); } }
+@keyframes wobble { 0%, 100% { transform: rotate(-4deg) translateY(0); } 50% { transform: rotate(4deg) translateY(-6px); } }
+@keyframes drift { from { transform: translate(0, 0) scale(1); } to { transform: translate(8%, 10%) scale(1.15); } }
+@keyframes pulse-soft { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
 @keyframes fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
 @media (max-width: 600px) {
   .stage { aspect-ratio: 4 / 3; }
-  .stage-body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; inset: 40px 16px 24px; }
-  .stage-sticker img { max-height: 90px; }
+  .stage-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; inset: 40px 16px 24px; gap: 10px; }
+  .stage-visual { height: auto; min-height: 110px; }
+  .stage-image { max-height: 150px; }
+  .stage-sticker.badge { max-width: 80px; }
 }
