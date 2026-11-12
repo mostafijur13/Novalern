@@ -5,7 +5,8 @@ import ErrorBanner from "../components/ErrorBanner";
 import LessonPlayer from "../components/LessonPlayer";
 import Spinner from "../components/Spinner";
 import { useAuth } from "../context/AuthContext";
-import { generateLessonScript, scriptToText, summarizeLesson } from "../lib/ai";
+import { summarizeLesson } from "../lib/ai";
+import { generateLessonScript, scriptToText } from "../lib/lessonPipeline";
 import { createLesson, getLesson, updateLesson } from "../lib/db";
 import { ACCEPT_ATTR, formatBytes, readUpload } from "../lib/files";
 import { speechRecognitionSupported, startRecognition } from "../lib/speech";
@@ -17,7 +18,6 @@ const SLOGANS = [
   ["Stuck on a problem?", "Paste it, snap it, or say it."],
 ];
 
-const LOADING_STEPS = ["Reading your question", "Planning the lesson", "Writing the scenes", "Finding pictures and a voice"];
 
 export default function Learn() {
   const { user } = useAuth();
@@ -31,7 +31,7 @@ export default function Learn() {
   const [interim, setInterim] = useState("");
   const [files, setFiles] = useState([]);
   const [sending, setSending] = useState(false);
-  const [loadingStep, setLoadingStep] = useState(0);
+  const [loadingStep, setLoadingStep] = useState("Understanding your question");
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState("");
   const [autoplayIndex, setAutoplayIndex] = useState(-1);
@@ -71,13 +71,6 @@ export default function Learn() {
   useEffect(() => {
     if (messages.length || sending) endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, sending]);
-
-  useEffect(() => {
-    if (!sending) return;
-    setLoadingStep(0);
-    const t = setInterval(() => setLoadingStep((s) => Math.min(s + 1, LOADING_STEPS.length - 1)), 1800);
-    return () => clearInterval(t);
-  }, [sending]);
 
   useEffect(() => () => stopRecRef.current?.(), []);
 
@@ -129,6 +122,7 @@ export default function Learn() {
     if (recording) stopRecRef.current?.();
 
     setError("");
+    setLoadingStep("Understanding your question");
     setSending(true);
     const userMsg = { role: "user", text: text || "(sent attachments)", attachments: files.map((f) => ({ name: f.name, type: f.mediaType })) };
     const history = messages;
@@ -138,7 +132,7 @@ export default function Learn() {
     setFiles([]);
 
     try {
-      const script = await generateLessonScript(history, text, outgoingFiles);
+      const script = await generateLessonScript(history, text, outgoingFiles, setLoadingStep);
       const assistantMsg = { role: "assistant", text: scriptToText(script), script, attachments: [] };
       const next = [...history, userMsg, assistantMsg];
       setMessages(next);
@@ -149,12 +143,22 @@ export default function Learn() {
         const id = await createLesson(user.uid, { messages: next, title });
         setLesson({ id, title, topic: "General", messages: next });
         navigate(`/learn/${id}`, { replace: true });
-        summarizeLesson(next)
-          .then((meta) => {
-            updateLesson(user.uid, id, meta);
-            setLesson((l) => (l ? { ...l, ...meta } : l));
-          })
-          .catch((err) => console.warn("Could not label lesson", err));
+        // The lesson plan already names the lesson, so no extra AI call is needed to label it.
+        const plan = script.plan;
+        const meta = plan
+          ? { title: plan.title, topic: plan.topic, summary: `${plan.goal} ${plan.keyIdeas.map((k) => k.name).join(", ")}.` }
+          : null;
+        if (meta) {
+          updateLesson(user.uid, id, meta);
+          setLesson((l) => (l ? { ...l, ...meta } : l));
+        } else {
+          summarizeLesson(next)
+            .then((m) => {
+              updateLesson(user.uid, id, m);
+              setLesson((l) => (l ? { ...l, ...m } : l));
+            })
+            .catch((err) => console.warn("Could not label lesson", err));
+        }
       } else {
         await updateLesson(user.uid, lesson.id, { messages: next });
       }
@@ -243,7 +247,7 @@ export default function Learn() {
                 <span className="typing"><i /><i /><i /></span>
                 <div>
                   <strong>Preparing your video lesson</strong>
-                  <div className="muted small">{LOADING_STEPS[loadingStep]}…</div>
+                  <div className="muted small">{loadingStep}…</div>
                 </div>
               </div>
             </div>

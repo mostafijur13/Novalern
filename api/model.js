@@ -3,7 +3,7 @@
 
 import { groqFetch, sendError, verifyUser } from "./_lib.js";
 
-const ALLOWED_MODELS = new Set(["openai/gpt-oss-120b", "qwen/qwen3.8-27b"]);
+const ALLOWED_MODELS = new Set(["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]);
 const MAX_OUTPUT_TOKENS = 16000;
 
 export default async function handler(req, res) {

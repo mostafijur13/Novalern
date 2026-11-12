@@ -1,62 +1,70 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { randomSticker, stickersEnabled } from "../lib/stickers";
 import { findImage } from "../lib/images";
+import { direct, normalizeScript } from "../lib/lessonPipeline";
 import { narrate, speechSynthesisSupported, stopNarration } from "../lib/speech";
 import { prefetchNarration } from "../lib/tts";
 import { playSfx, preloadSfx, setSfxMuted, sfxMuted } from "../lib/sounds";
+import "./player.css";
 
-const EFFECTS = ["fade", "slide", "zoom", "bounce"];
-const LAYOUTS = ["right", "left", "cover", "top", "right", "cover", "left", "top"];
-const THEMES = 6;
+const CHARS_PER_SECOND = 14; // rough speaking rate, used to pace on-screen reveals
 
 /**
- * Plays a lesson script like a video: one scene at a time, narrated, with a real
- * picture that moves around the stage, a sticker, pixel captions, colour themes,
- * sound effects and auto-advance. Sized by width; never scrolls internally.
+ * Plays a directed lesson script as a video. Every scene is drawn from a fixed template with
+ * its own regions: the picture sits in a clipped frame, so its motion never reaches the text.
  */
-export default function LessonPlayer({ script, autoplay = false }) {
-  const scenes = script.scenes;
+export default function LessonPlayer({ script: rawScript, autoplay = false }) {
+  const script = useMemo(() => normalizeScript(rawScript), [rawScript]);
+  const [legacyImages, setLegacyImages] = useState({});
+  const scenes = useMemo(() => {
+    if (!script.legacy) return script.scenes;
+    return direct(script.scenes.map((s, i) => (legacyImages[i] ? { ...s, image: legacyImages[i] } : s)));
+  }, [script, legacyImages]);
+
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(autoplay);
+  const [revealed, setRevealed] = useState(false); // quiz answer shown
   const [stickers, setStickers] = useState({});
-  const [images, setImages] = useState({});
   const [showTranscript, setShowTranscript] = useState(false);
+  const [captions, setCaptions] = useState(false);
   const [muted, setMuted] = useState(sfxMuted());
   const runId = useRef(0);
-  const firstRender = useRef(true);
   const scene = scenes[index];
   const atEnd = index >= scenes.length - 1;
 
+  // Stickers, preloaded pictures, and (for old lessons) lazy picture lookups.
   useEffect(() => {
     let cancelled = false;
     preloadSfx();
-    scenes.forEach((s, i) => {
-      if (stickersEnabled) {
-        randomSticker(s.sticker).then((st) => {
-          if (!cancelled) setStickers((prev) => ({ ...prev, [i]: st || false }));
-        });
+    script.scenes.forEach((s, i) => {
+      if (s.image?.url) {
+        const img = new Image();
+        img.src = s.image.url;
       }
-      const query = s.imageQuery === undefined ? s.caption : s.imageQuery;
-      findImage(query || "").then((img) => {
-        if (!cancelled) setImages((prev) => ({ ...prev, [i]: img || false }));
-      });
+      if (stickersEnabled && s.sticker) {
+        randomSticker(s.sticker).then((st) => !cancelled && st && setStickers((p) => ({ ...p, [i]: st })));
+      }
+      if (script.legacy && s.legacyQuery) {
+        findImage(s.legacyQuery).then((img) => !cancelled && img && setLegacyImages((p) => ({ ...p, [i]: { url: img.url, credit: img.credit, focus: "center" } })));
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [scenes]);
+  }, [script]);
 
+  // Scene entry: sound cue, reset quiz state.
   useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
-      return;
-    }
+    setRevealed(false);
     if (!playing) return;
-    playSfx(index === scenes.length - 1 ? "chime" : "whoosh");
-    const t = setTimeout(() => playSfx("pop"), 450);
-    return () => clearTimeout(t);
-  }, [index, playing, scenes.length]);
+    if (scene.sfx) playSfx(scene.sfx);
+    if (scene.sticker) {
+      const t = setTimeout(() => playSfx("pop"), 650);
+      return () => clearTimeout(t);
+    }
+  }, [index, playing]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Narrate, then advance. Quiz scenes reveal the answer before moving on.
   useEffect(() => {
     if (!playing) {
       stopNarration();
@@ -65,15 +73,22 @@ export default function LessonPlayer({ script, autoplay = false }) {
     const id = ++runId.current;
     const started = Date.now();
     prefetchNarration(scenes.slice(index + 1, index + 3).map((s) => s.narration));
-    narrate(scene.narration).then((how) => {
+    narrate(scene.narration).then(async (how) => {
       if (runId.current !== id) return;
-      const minDuration = how === "browser" && !speechSynthesisSupported ? 3500 + (scene.narration?.length || 0) * 40 : 1500;
-      const wait = Math.max(0, minDuration - (Date.now() - started));
-      setTimeout(() => {
+      const minDuration = how === "browser" && !speechSynthesisSupported ? 3500 + (scene.narration?.length || 0) * 45 : 1800;
+      await sleep(Math.max(0, minDuration - (Date.now() - started)));
+      if (runId.current !== id) return;
+      if (scene.template === "quiz" && scene.highlight) {
+        setRevealed(true);
+        playSfx("ding");
+        await sleep(2200);
         if (runId.current !== id) return;
-        if (index < scenes.length - 1) setIndex(index + 1);
-        else setPlaying(false);
-      }, wait);
+      } else {
+        await sleep(600);
+        if (runId.current !== id) return;
+      }
+      if (index < scenes.length - 1) setIndex(index + 1);
+      else setPlaying(false);
     });
     return () => {
       runId.current++;
@@ -100,59 +115,32 @@ export default function LessonPlayer({ script, autoplay = false }) {
     setPlaying((p) => !p);
   }
 
-  function toggleMute(e) {
-    e.stopPropagation();
+  function toggleMute() {
     const next = !muted;
     setMuted(next);
     setSfxMuted(next);
   }
 
+  // Pace reveals across the narration so text appears as it is spoken.
+  const speakSecs = Math.max(2.5, (scene.narration?.length || 40) / CHARS_PER_SECOND);
   const sticker = stickers[index] || null;
-  const image = images[index] || null;
-  const effect = EFFECTS.includes(scene.effect) ? scene.effect : EFFECTS[index % EFFECTS.length];
-  const layout = image ? LAYOUTS[index % LAYOUTS.length] : "none";
-  const theme = index % THEMES;
 
   return (
     <div className="player">
-      <div className={`stage fx-${effect} layout-${layout} theme-${theme}`} onClick={togglePlay} role="button" aria-label={playing ? "Pause" : "Play"}>
-        {image && layout === "cover" && (
-          <div className="stage-cover" key={`cover-${index}`}>
-            <SceneImage image={image} alt={scene.imageQuery} />
-          </div>
-        )}
+      <div
+        className={`stage theme-${scene.theme} ${playing ? "is-playing" : "is-paused"}`}
+        onClick={togglePlay}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => (e.key === " " || e.key === "Enter") && (e.preventDefault(), togglePlay())}
+        aria-label={playing ? "Pause lesson" : "Play lesson"}
+      >
+        <div className="stage-pattern" aria-hidden="true" />
+        {scene.template !== "title" && <div className="stage-title">{script.title}</div>}
 
-        <div className="stage-badge">{script.title}</div>
+        <Scene key={index} scene={scene} sticker={sticker} speakSecs={speakSecs} revealed={revealed} />
 
-        <div className="stage-body" key={index}>
-          <div className="stage-text">
-            <div className="stage-caption">{scene.caption}</div>
-            {scene.bullets?.length > 0 && (
-              <ul className="stage-bullets">
-                {scene.bullets.map((b, i) => (
-                  <li key={i} style={{ animationDelay: `${0.35 + i * 0.3}s` }}>{b}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="stage-visual">
-            {image && layout !== "cover" ? (
-              <SceneImage key={`img-${index}`} image={image} alt={scene.imageQuery} />
-            ) : !image && !sticker ? (
-              <span className="stage-sticker-placeholder" />
-            ) : null}
-            {sticker && (
-              <div className={"stage-sticker" + (image && layout !== "cover" ? " badge" : " solo")}>
-                <img src={sticker.url} alt={sticker.title} />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <button className="mute-btn" onClick={toggleMute} title={muted ? "Unmute sound effects" : "Mute sound effects"} aria-label={muted ? "Unmute sound effects" : "Mute sound effects"}>
-          {muted ? <MutedIcon /> : <SoundIcon />}
-        </button>
+        {captions && scene.narration && <div className="stage-cc">{scene.narration}</div>}
 
         {!playing && (
           <div className="stage-overlay">
@@ -163,34 +151,33 @@ export default function LessonPlayer({ script, autoplay = false }) {
 
         <div className="stage-progress" aria-hidden="true">
           {scenes.map((_, i) => (
-            <span key={i} className={i < index ? "done" : i === index ? (playing ? "active" : "current") : ""} />
+            <span key={i} className={i < index ? "done" : i === index ? (playing ? "active" : "current") : ""} style={i === index ? { "--dur": `${speakSecs + 1}s` } : undefined} />
           ))}
         </div>
       </div>
 
       <div className="player-controls">
         <div className="row">
-          <button className="icon-btn" onClick={() => go(index - 1)} disabled={index === 0} title="Previous scene" aria-label="Previous scene"><PrevIcon /></button>
-          <button className="btn sm" onClick={togglePlay}>
-            {playing ? "Pause" : atEnd ? "Replay" : "Play"}
-          </button>
-          <button className="icon-btn" onClick={() => go(index + 1)} disabled={atEnd} title="Next scene" aria-label="Next scene"><NextIcon /></button>
+          <button className="icon-btn" onClick={() => go(index - 1)} disabled={index === 0} aria-label="Previous scene"><PrevIcon /></button>
+          <button className="btn sm" onClick={togglePlay}>{playing ? "Pause" : atEnd ? "Replay" : "Play"}</button>
+          <button className="icon-btn" onClick={() => go(index + 1)} disabled={atEnd} aria-label="Next scene"><NextIcon /></button>
           <span className="scene-count">{index + 1} / {scenes.length}</span>
         </div>
-        <button className="link-btn small" onClick={() => setShowTranscript((s) => !s)}>
-          {showTranscript ? "Hide transcript" : "Show transcript"}
-        </button>
+        <div className="row">
+          <button className={"tool-btn" + (captions ? " on" : "")} onClick={() => setCaptions((c) => !c)} aria-pressed={captions}>CC</button>
+          <button className="tool-btn" onClick={toggleMute} aria-label={muted ? "Unmute sound effects" : "Mute sound effects"}>{muted ? <MutedIcon /> : <SoundIcon />}</button>
+          <button className="link-btn small" onClick={() => setShowTranscript((s) => !s)}>{showTranscript ? "Hide transcript" : "Transcript"}</button>
+        </div>
       </div>
+      {scene.image?.credit && <div className="muted small" style={{ marginTop: 4 }}>Picture: {scene.image.credit}</div>}
 
-      {!speechSynthesisSupported && (
-        <p className="muted small" style={{ margin: "6px 0 0" }}>Voice narration is not supported in this browser; scenes advance on a timer.</p>
-      )}
+      {!speechSynthesisSupported && <p className="muted small" style={{ margin: "6px 0 0" }}>Voice narration is not supported in this browser; scenes advance on a timer.</p>}
 
       {showTranscript && (
         <ol className="transcript">
           {scenes.map((s, i) => (
             <li key={i} className={i === index ? "current" : ""} onClick={() => go(i)}>
-              <strong>{s.caption}</strong> {s.narration}
+              <strong>{s.heading}</strong> {s.narration}
             </li>
           ))}
         </ol>
@@ -199,12 +186,98 @@ export default function LessonPlayer({ script, autoplay = false }) {
   );
 }
 
-function SceneImage({ image, alt }) {
-  const [i, setI] = useState(0);
-  const src = image.candidates[i];
-  if (!src) return null;
-  return <img className="stage-image" src={src} alt={alt || ""} referrerPolicy="no-referrer" onError={() => setI((n) => n + 1)} />;
+/* ------------------------------------------------------------------ scene */
+
+function Scene({ scene, sticker, speakSecs, revealed }) {
+  const { template, layout, heading, lines = [], highlight, image } = scene;
+  // Reveal delays: spread the lines across ~80% of the narration.
+  const step = lines.length ? (speakSecs * 0.8) / (lines.length + 1) : 0;
+  const delay = (i) => ({ animationDelay: `${0.5 + (i + 1) * step}s` });
+
+  const text = (
+    <div className={`scene-text t-${template}`}>
+      {template === "definition" ? (
+        <>
+          <div className="term">{heading}</div>
+          <div className="rule" />
+          {highlight && <p className="meaning reveal" style={delay(0)}>{highlight}</p>}
+          {lines.map((l, i) => <p key={i} className="sub reveal" style={delay(i + 1)}>{l}</p>)}
+        </>
+      ) : template === "compare" ? (
+        <>
+          <h3 className="heading">{heading}</h3>
+          <div className="compare">
+            {lines.map((l, i) => {
+              const [a, b] = l.split("::").map((x) => x.trim());
+              return (
+                <div key={i} className="compare-row reveal" style={delay(i)}>
+                  <span>{a}</span>
+                  <span>{b ?? ""}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : template === "quiz" ? (
+        <>
+          <div className="quiz-label">Quick check</div>
+          <h3 className="heading">{heading}</h3>
+          <ol className="quiz-options">
+            {lines.map((l, i) => (
+              <li key={i} className={"reveal" + (revealed ? (l.trim() === highlight?.trim() ? " correct" : " dim") : "")} style={delay(i)}>
+                <b>{"ABC"[i] || i + 1}</b> {l}
+              </li>
+            ))}
+          </ol>
+        </>
+      ) : (
+        <>
+          <h3 className="heading">{heading}</h3>
+          {lines.length > 0 && (
+            <ul className={template === "steps" ? "steps" : template === "recap" ? "ticks" : "facts"}>
+              {lines.map((l, i) => (
+                <li key={i} className="reveal" style={delay(i)}>
+                  {template === "steps" && <b>{i + 1}</b>}
+                  <span>{l}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {highlight && template !== "steps" && (
+            <div className="highlight reveal" style={delay(lines.length)}>
+              {template === "example" ? <span className="arrow">=</span> : null}
+              {highlight}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <div className={`scene layout-${layout} v-${scene.variant || "left"} tr-${scene.transition}`}>
+      {image?.url && (
+        <figure className={`frame m-${scene.motion} f-${image.focus || "center"} k-${image.kind || "photo"}`}>
+          <SceneImage image={image} />
+        </figure>
+      )}
+      {text}
+      {sticker && (
+        <div className="sticker">
+          <img src={sticker.url} alt="" />
+        </div>
+      )}
+    </div>
+  );
 }
+
+function SceneImage({ image }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return <img src={image.url} alt={image.title || ""} referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const svgProps = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
 function PlayIcon() { return <svg {...svgProps} width={26} height={26} fill="currentColor" stroke="none"><path d="M7 4l13 8-13 8z" /></svg>; }

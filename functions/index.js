@@ -11,7 +11,7 @@ const Groq = require("groq-sdk");
 
 const GROQ_API_KEY = defineSecret("GROQ_API_KEY");
 
-const ALLOWED_MODELS = new Set(["openai/gpt-oss-120b", "qwen/qwen3.8-27b"]);
+const ALLOWED_MODELS = new Set(["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]);
 const MAX_OUTPUT_TOKENS = 16000;
 const TTS_MODEL = "canopylabs/orpheus-v1-english";
 const TTS_VOICES = new Set(["hannah", "autumn", "diana", "austin", "daniel", "troy"]);

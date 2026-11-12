@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:dev.meta.ai)"
+      "WebFetch(domain:dev.meta.ai)",
+      "Bash(node -e ' *)",
+      "Bash(curl -s -o /dev/null -w \"500px thumb: %{http_code}\\\\n\" -m 20 \"https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/USGS_WaterCycle_English_ONLINE_20221013.png/500px-USGS_WaterCycle_English_ONLINE_20221013.png\" -A \"Novalern/1.0 \\(https://novalern-sigma.vercel.app\\)\")"
     ]
   }
 }

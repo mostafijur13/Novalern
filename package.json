@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "firebase": "^12.4.0",
     "groq-sdk": "^1.6.0",
     "pdfjs-dist": "^6.5.438",

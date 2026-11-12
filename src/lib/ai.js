@@ -15,6 +15,7 @@ import { auth, functions } from "./firebase";
 
 export const TEXT_MODEL = "openai/gpt-oss-120b";
 export const VISION_MODEL = "qwen/qwen3.8-27b";
+export const FAST_MODEL = "openai/gpt-oss-20b"; // quick judging jobs (picture ranking)
 export const MAX_IMAGES = 3;
 
 const directKey = import.meta.env.VITE_GROQ_API_KEY;
@@ -47,9 +48,9 @@ function getDirectClient() {
  * Low-level call. `messages` are OpenAI-style chat messages (without the system message).
  * When `schema` is given, the reply is parsed as JSON matching that schema.
  */
-async function callModel({ system, messages, schema, schemaName = "result", maxTokens = 4000, effort = "low", vision = false }) {
+export async function callModel({ system, messages, schema, schemaName = "result", maxTokens = 4000, effort = "low", vision = false, fast = false, noRetry = false }) {
   const body = {
-    model: vision ? VISION_MODEL : TEXT_MODEL,
+    model: vision ? VISION_MODEL : fast ? FAST_MODEL : TEXT_MODEL,
     messages: [{ role: "system", content: system }, ...messages],
     max_completion_tokens: maxTokens,
     reasoning_effort: effort,
@@ -62,7 +63,9 @@ async function callModel({ system, messages, schema, schemaName = "result", maxT
   let response;
   if (aiMode === "direct") {
     try {
-      response = await getDirectClient().chat.completions.create(body);
+      // noRetry: optional steps (like the picture check) give up at once instead of
+      // waiting out a rate limit, so they never stall a lesson.
+      response = await getDirectClient().chat.completions.create(body, noRetry ? { maxRetries: 0, timeout: 20000 } : undefined);
     } catch (err) {
       throw friendlyError(err);
     }
@@ -228,101 +231,7 @@ export async function chatWithTutor(history, userText, files = []) {
   });
 }
 
-// ---------- 1b. Learn with AI as a narrated video script ----------
-
-const SCRIPT_SCHEMA = {
-  type: "object",
-  properties: {
-    title: { type: "string", description: "Short title for this lesson clip, max 8 words" },
-    scenes: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          narration: {
-            type: "string",
-            description: "What the narrator says in this scene: 1-2 conversational spoken sentences, at most 200 characters, no markdown.",
-          },
-          caption: { type: "string", description: "Big on-screen headline, max 8 words" },
-          bullets: {
-            type: "array",
-            description: "0-3 short on-screen lines (max 10 words each). Empty array if none.",
-            items: { type: "string" },
-          },
-          sticker: {
-            type: "string",
-            description: "1-3 plain English words for a fun animated sticker that matches the mood of the scene, e.g. 'light bulb', 'thumbs up', 'thinking', 'celebration'.",
-          },
-          imageQuery: {
-            type: "string",
-            description: "2-5 word image search query for a REAL photo or diagram that precisely shows what this scene explains, e.g. 'chloroplast diagram', 'water cycle diagram', 'Eiffel Tower', 'right triangle hypotenuse'. Empty string if no real picture fits (e.g. pure math steps).",
-          },
-          effect: {
-            type: "string",
-            enum: ["fade", "slide", "zoom", "bounce"],
-            description: "Entrance animation for the scene text. Vary it across scenes.",
-          },
-        },
-        required: ["narration", "caption", "bullets", "sticker", "imageQuery", "effect"],
-        additionalProperties: false,
-      },
-    },
-  },
-  required: ["title", "scenes"],
-  additionalProperties: false,
-};
-
-const VIDEO_SYSTEM = `You are Novalern, a friendly study tutor who teaches through short narrated video clips.
-The student uploads class notes, textbook pages, homework problems (as images or PDFs) or types questions.
-Turn your answer into a sequence of scenes that will be played like a video: each scene is spoken aloud
-by a narrator while a headline, a few bullet lines and a sticker appear on screen.
-
-Rules:
-- For a new lesson or uploaded material: 10-16 scenes. For a follow-up question or a short problem: 4-8 scenes.
-- Scene 1 is a hook that says what we are about to learn. The last two scenes are a quick recap and one self-check question for the student.
-- Teach step by step at the student's level. For problems, work through the solution and state the final answer clearly.
-- narration: natural spoken language, 1-2 sentences and at most 200 characters, no markdown, no bullet symbols. Spell out formulas in words when spoken (e.g. "x squared plus two x").
-- caption: max 8 words. bullets: the key facts or formula of the scene, max 3 lines.
-- imageQuery: the most precise search for a real photo or labelled diagram that illustrates THIS scene (the specific object, place, organism, process or diagram), not a generic word. Leave empty only when no real picture would help.
-- sticker: a cheerful mood sticker in 1-3 words (reaction, emotion, celebration) - it is decoration, the imageQuery carries the meaning.
-- effect: rotate between fade, slide, zoom and bounce so consecutive scenes feel different.
-- Reply in the language the student writes in.`;
-
-/**
- * Same inputs as chatWithTutor, but returns a scene script:
- * { title, scenes: [{ narration, caption, bullets, sticker }] }
- */
-export async function generateLessonScript(history, userText, files = []) {
-  const prior = history.filter((m) => m.text).map((m) => ({ role: m.role, content: m.text }));
-  const { parts, hasImages } = filesToParts(files);
-  const content = [
-    ...parts,
-    {
-      type: "text",
-      text:
-        userText.trim() ||
-        (files.length ? "Please teach me what is in the attached file(s) so I understand it well." : "Hello"),
-    },
-  ];
-
-  const script = await callModel({
-    system: VIDEO_SYSTEM,
-    messages: [...prior, { role: "user", content }],
-    schema: SCRIPT_SCHEMA,
-    schemaName: "lesson_script",
-    maxTokens: 8000,
-    effort: "low",
-    vision: hasImages,
-  });
-  script.scenes = (script.scenes || []).filter((s) => s.narration || s.caption).slice(0, 20);
-  if (!script.scenes.length) throw new Error("The AI could not build a lesson from that. Try adding more detail.");
-  return script;
-}
-
-/** Plain-text transcript of a script, used for history, exams and the lesson summary. */
-export function scriptToText(script) {
-  return [script.title, ...script.scenes.map((s) => s.narration)].filter(Boolean).join("\n");
-}
+// The video-lesson pipeline lives in lessonPipeline.js.
 
 // ---------- 2. Title + summary for a lesson ----------
 

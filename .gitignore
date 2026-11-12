@@ -6,3 +6,5 @@ dist
 functions/node_modules
 functions/.env
 *.log
+scripts/.tmp
+.impeccable/review
